@@ -6,29 +6,27 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=64G
 #SBATCH --time=0-12:00:00
-#SBATCH --mail-type=ALL
-#SBATCH --mail-user=abce@cs.aau.dk
 
 nvidia-smi
 
 # Define the global variables
 MODELNAME=nonlinear
-BASEFOLDER=/home/cs.aau.dk/zs74qz/revisitingkmers/
+BASEFOLDER=$HOME/revisitingkmers
 PYTHON="singularity exec --nv ${BASEFOLDER}/../containers/nn python"
 SCRIPT_PATH=${BASEFOLDER}/src/nonlinear.py
 
 # Model Parameters
-INPUT_PATH=$BASEFOLDER/../kadir/dataset/train_2m.csv
+INPUT_PATH=$BASEFOLDER/../train_100k.csv
 POSTFIX=""
 K=4
 DIM=256
-EPOCHNUM=300
+EPOCHNUM=100
 LR=0.001
 NEGSAMPLEPERPOS=200
-BATCH_SIZE=10000
+BATCH_SIZE=100
 MAXREADNUM=100000 
 SEED=26042024
-CHECKPOINT=0
+CHECKPOINT=1
 
 # Define the output path
 OUTPUT_PATH=${BASEFOLDER}/models/${MODELNAME}_train_2m_k=${K}_d=${DIM}_negsampleperpos=${NEGSAMPLEPERPOS}

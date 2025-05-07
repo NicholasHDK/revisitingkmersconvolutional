@@ -6,12 +6,11 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=256G
 #SBATCH --time=0-12:00:00
-#SBATCH --mail-type=ALL
-#SBATCH --mail-user=abce@cs.aau.dk
+
 
 # Define the global variables
-BASEFOLDER=/home/cs.aau.dk/zs74qz/revisitingkmers/
-PYTHON="singularity exec --nv ${BASEFOLDER}/../containers/nn python"
+BASEFOLDER=${HOME}/revisitingkmers/
+PYTHON="singularity exec --nv ${BASEFOLDER}/../project_base.sif python3"
 SCRIPT_PATH=${BASEFOLDER}/evaluation/binning.py
 RESULTS_FOLDER=${BASEFOLDER}/results
 
@@ -39,20 +38,20 @@ DIM=256
 EPOCHNUM=300
 LR=0.001
 NEGSAMPLEPERPOS=200
-BATCH_SIZE=10000
+BATCH_SIZE=8
 MAXREADNUM=100000
-MODELNAME="nonlinear"
+MODELNAME="conv_nonlinear"
 
 # Define the model name
 
-MODELNAME=${MODELNAME}_train_2m_k=${K}_d=${DIM}_negsampleperpos=${NEGSAMPLEPERPOS}
-MODELNAME=${MODELNAME}_epoch=${EPOCHNUM}_LR=${LR}_batch=${BATCH_SIZE}_maxread=${MAXREADNUM}${POSTFIX}
+
+MODELNAME=${BASEFOLDER}/model_checkpoint20.pt
 
 # Define the evaluation parameters
 SPECIES_LIST=("reference") #("reference" "plant" "marine")
-MODELLIST=nonlinear
-DATA_DIR=${BASEFOLDER}/../kadir/dataset/
-MODEL_PATH=${BASEFOLDER}/models/${MODELNAME}.model
+MODELLIST=conv_nonlinear
+DATA_DIR=${BASEFOLDER}/../dataset/
+MODEL_PATH=${BASEFOLDER}/${MODELNAME}.pt
 
 for SPECIES in ${SPECIES_LIST[@]}
 do

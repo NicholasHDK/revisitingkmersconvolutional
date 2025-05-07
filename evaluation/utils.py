@@ -13,6 +13,7 @@ from sklearn.preprocessing import normalize
 from src.poisson_model import PoissonModel
 from src.nonlinear import NonLinearModel
 from scipy.optimize import linear_sum_assignment
+from src.conv_nonlinear import ConvFeatureExtractor, NonLinearModel, ConvNonLinear
 
 MODEL2BATCH_SIZE = {
     "tnf": 100, "tnf_k": 100, "hyenadna": 100, "dnabert2": 20, "nt": 64, "dnaberts": 20,
@@ -114,6 +115,86 @@ def get_embedding(
             nlm = NonLinearModel(**kwargs)
             nlm.load_state_dict(model_state_dict)
             embedding = nlm.read2emb(dna_sequences)
+
+        elif model_name == "conv_nonlinear":
+            print("in ", model_name)
+            device = "cpu"
+            checkpoint_model = torch.load(test_model_dir, map_location=device)
+
+            # Rebuild components
+            feature_extractor = ConvFeatureExtractor(256).to(device)
+            encoder = NonLinearModel(
+                inputs=256, dim=256, seed=1
+            ).to(device)
+
+            model = ConvNonLinear(feature_extractor, encoder).to(device)
+
+            # Restore weights
+            model.feature_extractor.load_state_dict(checkpoint_model['feature_extractor_state_dict'])
+            model.fc.load_state_dict(checkpoint_model['fc_state_dict'])
+            model.load_state_dict(checkpoint_model['model_state_dict'])
+            
+            def dense_encoding(read: str):
+                seq = np.array(read, dtype=np.bytes_).reshape(1, -1)
+                seq = seq.view(np.uint8).squeeze()
+                result = torch.zeros(seq.shape[-1], dtype=torch.uint8)
+                result[seq == 65] = 0
+                result[seq == 67] = 1
+                result[seq == 71] = 2
+                result[seq == 84] = 3
+                return result
+            
+            def batched_dense_to_onehot(reads):
+                """
+                Convert a batch of DNA sequences from dense encoding to one-hot encoding.
+                
+                Args:
+                    reads (Tensor): A tensor of shape (N, L) containing values in {0, 1, 2, 3, -1}.
+                
+                Returns:
+                    Tensor: A one-hot encoded tensor of shape (N, 4, L).
+                """
+                num_classes = 4
+                # Handle unknown (-1) by replacing it with 0 temporarily (it will be masked later)
+                masked_reads = torch.where(reads < 0, torch.tensor(0, dtype=reads.dtype, device=reads.device), reads).to(torch.int64)
+
+                # One-hot encoding using torch.nn.functional.one_hot, shape: (N, L, 4)
+                one_hot = torch.nn.functional.one_hot(masked_reads, num_classes=num_classes).to(torch.float32)
+
+                # Move the one-hot channel to the correct position: (N, 4, L)
+                one_hot = one_hot.permute(0, 2, 1)
+
+                # Set unknown values (-1 in input) to all zeros in the one-hot encoding
+                one_hot[(reads < 0).unsqueeze(1).expand_as(one_hot)] = 0
+                return one_hot
+
+            # convert dna sequences to one hot encoded tensors
+            print(len(dna_sequences))
+            dense_encodings = list(map(dense_encoding, dna_sequences))
+            max_len = max(list(map(len, dense_encodings)))
+            dense_encodings = [torch.nn.functional.pad(seq, (0, max_len - seq.shape[-1])) for seq in dense_encodings]
+            one_hot_encodings = torch.stack(dense_encodings)
+            dna_sequences = batched_dense_to_onehot(one_hot_encodings)
+            dna_sequences = dna_sequences.unsqueeze(1)
+            # pass one hot encodings to feature extractor, and then to encoder
+            result = []
+            batch_size = 100
+            i = 0
+            
+            while i < len(dna_sequences) // batch_size:
+                batch = dna_sequences[i*batch_size:i*batch_size + batch_size]
+                result.append(encoder.encoder(feature_extractor(batch)))
+                i += 1
+            
+            if not ((len(dna_sequences) % batch_size) == 0): 
+                result.append(encoder.encoder(feature_extractor(dna_sequences[i*batch_size:])))
+            
+            result = torch.vstack(result)
+            embeddings = np.array(result.detach().cpu())
+            return embeddings
+        elif model_name == "conv_feature_extractor":
+            raise NotImplementedError(f"{model_name} not implemented yet")
+            
 
         else:
             raise ValueError(f"Unknown model {model_name}")

@@ -1,0 +1,61 @@
+#!/bin/bash
+#SBATCH --job-name=SCALABLE
+#SBATCH --output=%x_%j.out
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=200G
+#SBATCH --time=0-12:00:00
+#SBATCH  --partition=batch
+
+nvidia-smi
+set -eu
+
+# Critical for PyTorch distributed
+export MASTER_PORT=$(expr 10000 + $(echo -n $SLURM_JOBID | tail -c 4))
+export MASTER_ADDR=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)
+echo "port" ${MASTER_PORT} "==" ${MASTER_ADDR} "==" ${SLURM_JOB_NODELIST} "--" 
+
+#export NCCL_DEBUG=INFO # For printing the debug related to NCCL
+export NCCL_SOCKET_IFNAME=bond0
+#export NCCL_P2P_LEVEL=PHB
+
+# Define the global variables
+NAME=scalable
+BASEFOLDER=$HOME/revisitingkmers
+PYTHON="srun singularity exec --nv ${HOME}/project_base.sif python3"
+SCRIPT_PATH=${BASEFOLDER}/src/scalable.py
+
+# Model Parameters
+INPUT_PATH=$HOME/dataset/train_100k.csv
+LOSS_NAME="vib_without_sampling"
+POSTFIX="_test9"
+K=8
+OUT_DIM=256
+NEGSAMPLEPERPOS=200
+MAXSEQNUM=100000
+EPOCHNUM=50 #100 #300
+LR=0.001
+BATCH_SIZE=8 #100000 #1000 #10000
+SAVE_EVERY=1 #50
+DISTRIBUTED=1 #0 #1
+DEVICE=None #gpu #None #gpu
+SEED=1
+TRAINED_MODEL_PATH="${BASEFOLDER}/models/scalable_100_k=8_d=256_negsampleperpos=200_maxseq=100000_epoch=50_LR=0.001_batch=8_device=None_loss=vib_without_sampling_seed=1_test9.model.epoch_3.checkpoint"
+START_EPOCH=3
+NUM_FILTERS=136
+
+# Define the output path
+NAME=${NAME}_100_k=${K}_d=${OUT_DIM}_negsampleperpos=${NEGSAMPLEPERPOS}
+NAME=${NAME}_maxseq=${MAXSEQNUM}_epoch=${EPOCHNUM}_LR=${LR}_batch=${BATCH_SIZE}
+NAME=${NAME}_device=${DEVICE}_loss=${LOSS_NAME}_seed=${SEED}${POSTFIX}
+
+OUTPUT_PATH=${BASEFOLDER}/models/${NAME}.model
+LOG_DIR=${BASEFOLDER}/logs/${NAME}
+
+# Define the command
+CMD="$PYTHON ${SCRIPT_PATH} --input $INPUT_PATH --output_path ${OUTPUT_PATH} --k ${K} --out_dim ${OUT_DIM}"
+CMD="${CMD} --neg_sample_per_pos ${NEGSAMPLEPERPOS} --max_seq_num ${MAXSEQNUM}"
+CMD="${CMD} --epoch $EPOCHNUM --lr $LR --batch_size ${BATCH_SIZE} --save_every ${SAVE_EVERY} --distributed ${DISTRIBUTED}"
+CMD="${CMD} --device ${DEVICE} --loss_name ${LOSS_NAME} --seed ${SEED}"
+# Run the command
+$CMD
+

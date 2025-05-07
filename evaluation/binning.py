@@ -54,10 +54,12 @@ def main(args):
                 print(f"Clustering data contains {len(dna_sequences)} sequences with {num_clusters} clusters.")
 
                 # Get embeddings
+                print(f"n seqs: {len(dna_sequences)}")
                 embedding = get_embedding(
                     dna_sequences=dna_sequences, model_name=model_name, species=species, sample=0,
                     k=args.k, task_name="clustering", test_model_dir=args.test_model_dir, suffix=args.suffix,
                 )
+                print(f"n embeddings: {len(embedding)}")
 
                 percentile_values = compute_class_center_medium_similarity(embedding, labels, metric=metric)
                 threshold = percentile_values[-3]
@@ -71,19 +73,27 @@ def main(args):
                     data = list(reader)[1:]
 
                 dna_sequences = [d[0][:MAX_SEQ_LEN] for d in data]
-                labels_bin = [d[1] for d in data]
+                print(f"n binning seqs: {len(dna_sequences)}")
 
+                labels_bin = [d[1] for d in data]
+                print(f"n labels {len(labels_bin)}")
                 # filter sequences with length < 2500
                 filterd_idx = [i for i, seq in enumerate(dna_sequences) if len(seq) >= MIN_SEQ_LEN]
                 dna_sequences = [dna_sequences[i] for i in filterd_idx]
+                print(f"n filtered seqs: {len(dna_sequences)}")
+
                 labels_bin = [labels_bin[i] for i in filterd_idx]
+                print(f"len labels bin: {len(labels_bin)}")
 
                 # filter sequences with low abundance labels (less than 10)
                 label_counts = collections.Counter(labels_bin)
+                print(f"len label_counts: {len(label_counts)}")
+
                 filterd_idx = [i for i, l in enumerate(labels_bin) if label_counts[l] >= MIN_ABUNDANCE_VALUE]
                 dna_sequences = [dna_sequences[i] for i in filterd_idx]
                 labels_bin = [labels_bin[i] for i in filterd_idx]
-
+                print(f"len labels bin: {len(labels_bin)}")
+                
                 # convert labels to numeric values
                 label2id = {l: i for i, l in enumerate(set(labels_bin))}
                 labels_bin = np.array([label2id[l] for l in labels_bin])
@@ -95,7 +105,7 @@ def main(args):
                     dna_sequences, model_name, species, sample, k=args.k, metric=metric,
                     task_name="binning", test_model_dir=args.test_model_dir, suffix=args.suffix,
                 )
-
+                print(embedding.shape)
                 # Run the KMedoid algorithm
                 binning_results = KMedoid(
                     embedding, min_similarity=threshold, min_bin_size=10,

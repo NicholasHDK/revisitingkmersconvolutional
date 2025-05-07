@@ -20,13 +20,12 @@ def set_seed(seed):
     random.seed(seed)
     torch.manual_seed(seed)
 
-
 class PairDataset(Dataset):
     def __init__(self, file_path, transform_func, neg_sample_per_pos=1000, max_read_num=0, verbose=True, seed=0):
 
         # Set the parameters
         self.__both_kmer_profiles = None
-        self.__transform_func = transform_func
+        self.__transform_func = lambda x: transform_func(self.dense_to_onehot(dense_encoding(x)))
         self.__neg_sample_per_pos = neg_sample_per_pos
         self.__seed = seed
 
@@ -75,6 +74,24 @@ class PairDataset(Dataset):
         # Temporary variables
         self.__ones = torch.ones((len(self.__both_kmer_profiles),))
 
+    def dense_encoding(self, read: str) -> Tensor:
+    seq = np.array(read, dtype=np.bytes_).reshape(1, -1)
+    seq = seq.view(np.uint8).squeeze()
+    result = torch.zeros(seq.shape[-1], dtype=torch.uint8)
+    result[seq == 65] = 0
+    result[seq == 67] = 1
+    result[seq == 71] = 2
+    result[seq == 84] = 3
+    return result
+    
+    def dense_to_onehot(self, read: Tensor) -> Tensor:
+        result = torch.zeros((4, read.shape[-1]), dtype=torch.float)
+        result[0, read == 0] = 1
+        result[1, read == 1] = 1
+        result[2, read == 2] = 1
+        result[3, read == 3] = 1
+        return result
+
     def __len__(self):
 
         return len(self.__both_kmer_profiles) // 2
@@ -100,7 +117,16 @@ class PairDataset(Dataset):
 
         return left_kmer_profiles, right_kmer_profiles, labels
 
-
+class ConvFeatureExtractor(nn.Module):
+    def __init__(self, n_filters: int):
+        super().__init__()
+        self.filters = nn.Conv2d(1, n_filters, kernel_size=(4, 4), device="cuda")
+        
+    def forward(self, X: Tensor):
+        """X is a tensor of shape (B, 1, 4, L)"""
+        y = self.filters(X).mean(dim=-1).squeeze()
+        return y
+        
 class NonLinearModel(torch.nn.Module):
     def __init__(self, k, dim=256, device=torch.device("cpu"), verbose=False, seed=0):
         super(NonLinearModel, self).__init__()
@@ -197,7 +223,6 @@ def loss_func(left_embeddings, right_embeddings, labels, name="bern"):
     else:
 
         raise ValueError(f"Unknown loss function: {name}")
-
 
 def single_epoch(model, loss_func, optimizer, training_loader, loss_name="bern"):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -301,6 +326,8 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, default=26042024, help='Seed for random number generator')
     parser.add_argument('--checkpoint', type=int, default=0, help='Save the model for every checkpoint epoch')
     args = parser.parse_args()
+
+    feature_extractor = torch.load()
 
     # Define the model
     model = NonLinearModel(
