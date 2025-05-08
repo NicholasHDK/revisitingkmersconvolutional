@@ -55,7 +55,7 @@ LOG_DIR=${BASEFOLDER}/logs/${NAME}
 CMD="$PYTHON ${SCRIPT_PATH} --input $INPUT_PATH --output_path ${OUTPUT_PATH} --k ${K} --out_dim ${OUT_DIM}"
 CMD="${CMD} --neg_sample_per_pos ${NEGSAMPLEPERPOS} --max_seq_num ${MAXSEQNUM}"
 CMD="${CMD} --epoch $EPOCHNUM --lr $LR --batch_size ${BATCH_SIZE} --save_every ${SAVE_EVERY} --distributed ${DISTRIBUTED}"
-CMD="${CMD} --device ${DEVICE} --loss_name ${LOSS_NAME} --seed ${SEED}"
+CMD="${CMD} --device ${DEVICE} --loss_name ${LOSS_NAME} --seed ${SEED} --trained_model_path=scalable_100_k=8_d=256_negsampleperpos=200_maxseq=100000_epoch=50_LR=0.001_batch=8_device=None_loss=vib_without_sampling_seed=1_test9.model.epoch_3.checkpoint --start_epoch 3"
 # Run the command
 $CMD
 

@@ -554,7 +554,7 @@ def main_worker(
     ### Train the model
     train(
         device=device, distributed=distributed, model=model, criterion=criterion, optimizer=optimizer,
-        data_loader=training_loader, epoch_num=epoch_num, save_every=save_every, output_path=output_path, args
+        data_loader=training_loader, epoch_num=epoch_num, save_every=save_every, output_path=output_path, args=args
     )
 
     if distributed:
