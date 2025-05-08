@@ -196,7 +196,7 @@ class ConvFeatureExtractor(nn.Module):
         self.filters = nn.Conv2d(1, n_filters, kernel_size=(4, k))
         if filters is not None:
             with torch.no_grad():
-                self.filters.weights.value = filters
+                self.filters.weight.value = filters
 
     def forward(self, X: Tensor):
         """X is a list of tensors of shape (B, 1, 4, L)"""
@@ -555,7 +555,7 @@ def main_worker(
 
         indices = torch.randperm(filter_candidates.size(0))[:args.num_filters]
         filter_weights = filter_candidates[indices]
-        model = VIBModel(k=k, out_dim=args.out_dim, seed=args.seed, n_filters=args.num_filters, filter_weights)
+        model = VIBModel(k=k, out_dim=args.out_dim, seed=args.seed, n_filters=args.num_filters, filters=filter_weights)
     
     if distributed:
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
@@ -572,7 +572,7 @@ def main_worker(
     ### Train the model
     train(
         device=device, distributed=distributed, model=model, criterion=criterion, optimizer=optimizer,
-        data_loader=training_loader, epoch_num=epoch_num, save_every=save_every, output_path=output_path, args
+        data_loader=training_loader, epoch_num=epoch_num, save_every=save_every, output_path=output_path, args=args
     )
 
     if distributed:
