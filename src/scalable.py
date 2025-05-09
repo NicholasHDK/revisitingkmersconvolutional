@@ -532,9 +532,11 @@ def main_worker(
     ### Define the model
     # Nich: load model if args.trained_model_path
     if args.trained_model_path is not None:
-        checkpoint_model = torch.load(args.trained_model_path)
-        model = VIBModel(args.k, args.out_dim, args.seed, args.num_filters)
-        model.load_state_dict(checkpoint_model['model_state_dict'])
+        checkpoint = torch.load(args.trained_model_path)
+        config = checkpoint[0]
+        state_dict = checkpoint[1]
+        model = VIBModel(k=config['k'], out_dim=config['out_dim'], n_filters=args.num_filters)
+        model.load_state_dict(state_dict)
         print("Loaded model")
     else:
         model = VIBModel(k=k, out_dim=args.out_dim, seed=args.seed, n_filters=args.num_filters)
