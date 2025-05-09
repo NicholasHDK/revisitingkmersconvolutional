@@ -193,7 +193,7 @@ class ConvFeatureExtractor(nn.Module):
         super().__init__()
         self.n_filters = n_filters
         self.k = k
-        self.filters = nn.Conv2d(1, n_filters, kernel_size=(4, k), device="cuda")
+        self.filters = nn.Conv2d(1, n_filters, kernel_size=(4, k))
         
     def forward(self, X: Tensor):
         """X is a list of tensors of shape (B, 1, 4, L)"""
