@@ -19,7 +19,7 @@ echo "MASTER_PORT=$MASTER_PORT"
 # NCCL Debugging and Communication Setup
 #export NCCL_DEBUG=INFO
 #export NCCL_IB_DISABLE=1
-export NCCL_SOCKET_IFNAME=bond0
+#export NCCL_SOCKET_IFNAME=bond0
 
 # Define the global variables
 MODELNAME=conv_nonlinear
@@ -28,7 +28,7 @@ PYTHON="singularity exec --nv ${HOME}/project_base.sif python3"
 SCRIPT_PATH=${BASEFOLDER}/src/conv_nonlinear.py
 
 # Model Parameters
-INPUT_PATH=$HOME/train_100k.csv
+INPUT_PATH=$HOME/dataset/train_100k.csv
 POSTFIX=""
 K=8
 DIM=256

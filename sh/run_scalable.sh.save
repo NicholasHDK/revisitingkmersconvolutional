@@ -4,7 +4,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=200G
 #SBATCH --time=0-12:00:00
-
+#SBATCH  --partition=batch
 
 nvidia-smi
 set -eu
@@ -34,7 +34,7 @@ NEGSAMPLEPERPOS=200
 MAXSEQNUM=100000
 EPOCHNUM=50 #100 #300
 LR=0.001
-BATCH_SIZE=1000 #100000 #1000 #10000
+BATCH_SIZE=8 #100000 #1000 #10000
 SAVE_EVERY=1 #50
 DISTRIBUTED=1 #0 #1
 DEVICE=None #gpu #None #gpu
@@ -42,7 +42,6 @@ SEED=1
 TRAINED_MODEL_PATH="${BASEFOLDER}/models/scalable_100_k=8_d=256_negsampleperpos=200_maxseq=100000_epoch=50_LR=0.001_batch=8_device=None_loss=vib_without_sampling_seed=1_test9.model.epoch_3.checkpoint"
 START_EPOCH=3
 NUM_FILTERS=136
-WORKERS_NUM=8
 
 # Define the output path
 NAME=${NAME}_100_k=${K}_d=${OUT_DIM}_negsampleperpos=${NEGSAMPLEPERPOS}
@@ -53,10 +52,10 @@ OUTPUT_PATH=${BASEFOLDER}/models/${NAME}.model
 LOG_DIR=${BASEFOLDER}/logs/${NAME}
 
 # Define the command
-CMD="$PYTHON ${SCRIPT_PATH} --input $INPUT_PATH --output_path ${OUTPUT_PATH} --k ${K} --out_dim ${OUT_DIM}"
+CMD="$PYTHON -m torch.profiler SCRIPT_PATH} --input $INPUT_PATH --output_path ${OUTPUT_PATH} --k ${K} --out_dim ${OUT_DIM}"
 CMD="${CMD} --neg_sample_per_pos ${NEGSAMPLEPERPOS} --max_seq_num ${MAXSEQNUM}"
 CMD="${CMD} --epoch $EPOCHNUM --lr $LR --batch_size ${BATCH_SIZE} --save_every ${SAVE_EVERY} --distributed ${DISTRIBUTED}"
-CMD="${CMD} --device ${DEVICE} --loss_name ${LOSS_NAME} --seed ${SEED} --workers ${WORKERS_NUM}"
+CMD="${CMD} --device ${DEVICE} --loss_name ${LOSS_NAME} --seed ${SEED}"
 # Run the command
 $CMD
 

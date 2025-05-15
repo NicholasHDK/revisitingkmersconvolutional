@@ -105,32 +105,29 @@ class PairDataset(Dataset):
             chosen_lines = list(range(num_of_lines))
 
         # Read the file
-        left_dense, right_dense = [], []
+        left_kmer_profiles, right_kmer_profiles = [], []
         # with open(file_path, 'r') as f:
         #     reader = list(csv.reader(f, delimiter=','))
         lines = pd.read_csv(file_path, sep=',', header=None).iloc[chosen_lines].values.tolist()
         for line in lines:
             left_seq, right_seq = line[0], line[1]
             # Nich: use transform func to convert reads to dense encoding (as discussed in meetings)
-            left_dense.append(self.__transform_func(left_seq))
-            right_dense.append(self.__transform_func(right_seq))
+            left_kmer_profiles.append(self.__transform_func(left_seq))
+            right_kmer_profiles.append(self.__transform_func(right_seq))
+
+        # Nich: pad dense encodings to ensure they're all the same shape, and stack to create self.__kmers
+        max_profile_len = max([profile.shape[-1] for profile in left_kmer_profiles + right_kmer_profiles])
+        left_kmer_profiles = torch.stack([F.pad(x, (-1, max_profile_len - x.shape[-1])) for x in left_kmer_profiles])
+        right_kmer_profiles = torch.stack([F.pad(x, (-1, max_profile_len - x.shape[-1])) for x in right_kmer_profiles])
+        # Combine the left and right k-mer profiles
         
-        # Nich: Filter pairs where both sequences are exactly length 10000
-        filtered = [
-            (l, r) for l, r in zip(left_dense, right_dense)
-            if len(l) == 10000 and len(r) == 10000
-        ]
-
-        # Unzip the filtered result back into two lists
-        left_dense, right_dense = zip(*filtered)
-        left_dense = list(left_dense)
-        right_dense = list(right_dense)
-        left_dense = torch.stack(left_dense)
-        right_dense = torch.stack(right_dense)
-
+        self.__kmers = torch.vstack([left_kmer_profiles, right_kmer_profiles]).float()
+        assert self.__kmers.shape[0] % 2 == 0, "Number of kmers should be even (pairs of left/right)."
+        assert self.__kmers.shape[0] > 0, "No kmer data was loaded."
+        print(f"Number of sequences loaded: {self.__kmers.shape[0]}")
+        print(f"Expected number of pairs: {self.__kmers.shape[0] // 2}")
         # Combine the left and right k-mer profiles.
         # The first half of the profiles are the left ones and the second half are the right ones
-        self.__kmers = torch.vstack([left_dense, right_dense]).long()
         
 
         if verbose:
@@ -157,6 +154,7 @@ class PairDataset(Dataset):
         ))
         # Concatenate the positive and negative indices
         self.__indices = torch.hstack((pos_indices, neg_indices))
+        print(self.__indices.shape)
         self.__labels = torch.hstack((
             torch.ones((pos_indices.shape[1],), dtype=torch.float),
             torch.zeros((neg_indices.shape[1],), dtype=torch.float))
@@ -190,9 +188,7 @@ class PairDataset(Dataset):
 
     def __getitem__(self, idx):
         # self.__kmers[self.__indices[0, idx]], self.__kmers[self.__indices[1, idx]], self.__labels[idx]
-        result = torch.index_select(self.__kmers, dim=0, index=self.__indices[0, idx]), torch.index_select(self.__kmers, dim=0, index=self.__indices[1, idx]), self.__labels[idx]
-
-        return result
+        return torch.index_select(self.__kmers, dim=0, index=self.__indices[0, idx]), torch.index_select(self.__kmers, dim=0, index=self.__indices[1, idx]), self.__labels[idx]
 
 # Nich: define convolutional input layer as module
 class ConvFeatureExtractor(nn.Module):
@@ -243,7 +239,7 @@ class VIBModel(torch.nn.Module):
         t0 = time.time()
         feats = self.conv_feature_extractor(kmers)
         t1 = time.time()
-        #print(f"time to calculate features: {t1 - t0}")
+        print(f"time to calculate features: {t1 - t0}")
         h = self.linear1_common(feats)
         h = self.batch1_common(h)
         h = self.activation1_common(h)
@@ -251,7 +247,7 @@ class VIBModel(torch.nn.Module):
         mean = self.linear2_mean(h)
         std = torch.nn.functional.softplus(self.linear2_std(h)) + 1e-6
         t2 = time.time()
-        #print(f"time to do fully connected: {t2 - t1}")
+        print(f"time to do fully connected: {t2 - t1}")
         return mean, std
 
     def forward(self, left_kmers: torch.Tensor, right_kmers:torch.Tensor):
@@ -393,15 +389,12 @@ def train_batch(model, criterion, optimizer, left_kmers: torch.Tensor, right_kme
     left_mean, left_std, right_mean, right_std = model(left_kmers, right_kmers)
 
     # Compute the loss and backpropagate
-    t0 = time.time()
     batch_loss = criterion(left_mean, left_std, right_mean, right_std, labels)
-    t1 = time.time()
-    #print(f"time to calculate loss: {t1 - t0}")
     batch_loss.backward()
+
     # Update the model parameters
     optimizer.step()
-    t2 = time.time()
-    #print(f"time to backpropagate: {t2-t1}")
+
     return batch_loss
 
 def train_single_epoch(device, model, criterion, optimizer, data_loader):
@@ -415,21 +408,23 @@ def train_single_epoch(device, model, criterion, optimizer, data_loader):
         t0 = time.time()
         for data in data_loader:
             t1 = time.time()
-            #print(f"time to load data: {t1 - t0}")
-            left_kmers, right_kmers, labels = data
-            left_kmers = left_kmers.to(device)
-            right_kmers = right_kmers.to(device)
-            labels = labels.squeeze().to(device)
-            t0 = time.time()
+            print(f"time to load data: {t1 - t0}")
+            with record_function("training_step"):
+                left_kmers, right_kmers, labels = data
+                print(left_kmers.shape)
+                left_kmers = left_kmers.to(device)
+                right_kmers = right_kmers.to(device)
+                labels = labels.squeeze().to(device)
+                t0 = time.time()
 
-            # Run the training for the current batch
-            batch_loss = train_batch(
-                model=model, criterion=criterion, optimizer=optimizer,
-                left_kmers=left_kmers, right_kmers=right_kmers, labels=labels
-            )
-            t1 = time.time()
-            #print(f"time to calculate loss: {t1 - t0}")
-            t0 = time.time()
+                # Run the training for the current batch
+                batch_loss = train_batch(
+                    model=model, criterion=criterion, optimizer=optimizer,
+                    left_kmers=left_kmers, right_kmers=right_kmers, labels=labels
+                )
+                t1 = time.time()
+                print(f"time to calculate loss: {t1 - t0}")
+                t0 = time.time()
         prof.step()
 
             # Get the epoch loss for reporting
@@ -496,16 +491,21 @@ def batched_dense_to_onehot(reads: Tensor) -> Tensor:
     Convert a batch of DNA sequences from dense encoding to one-hot encoding.
     
     Args:
-        reads (Tensor): A tensor of shape (N, L) containing values in {0, 1, 2, 3}.
+        reads (Tensor): A tensor of shape (N, L) containing values in {0, 1, 2, 3, -1}.
     
     Returns:
         Tensor: A one-hot encoded tensor of shape (N, 4, L).
     """
     num_classes = 4
+    # Handle unknown (-1) by replacing it with 0 temporarily (it will be masked later)
+    masked_reads = torch.where(reads < 0, torch.tensor(0, dtype=reads.dtype, device=reads.device), reads).to(torch.int64)
     # One-hot encoding using torch.nn.functional.one_hot, shape: (N, L, 4)
-    one_hot = torch.nn.functional.one_hot(reads, num_classes=num_classes).to(torch.float32)
+    one_hot = torch.nn.functional.one_hot(masked_reads, num_classes=num_classes).to(torch.float32)
     # Move the one-hot channel to the correct position: (N, 4, L)
     one_hot = one_hot.permute(0, 2, 1)
+    # Set unknown values (-1 in input) to all zeros in the one-hot encoding
+    one_hot[(reads < 0).unsqueeze(1).expand_as(one_hot)] = 0
+
     return one_hot
 
 # Nich: define collate_fn to use in dataloader
@@ -514,10 +514,11 @@ def collate_fn(batch):
     convert dense representation to onehot
     batch: left reads, right reads, labels
     """
-    left_dense, right_dense, labels = torch.vstack([item[0] for item in batch]), torch.vstack([item[1] for item in batch]), torch.vstack([item[2] for item in batch])
-    #convert to onehot encoding
-    left_onehots = batched_dense_to_onehot(left_dense).unsqueeze(1) # add channel dimension
-    right_onehots = batched_dense_to_onehot(right_dense).unsqueeze(1)
+    print("in collate_fn")
+    left_reads, right_reads, labels = torch.vstack([item[0] for item in batch]), torch.vstack([item[1] for item in batch]), torch.vstack([item[2] for item in batch])
+    left_onehots = batched_dense_to_onehot(left_reads).unsqueeze(1) # add channel dimension
+    right_onehots = batched_dense_to_onehot(right_reads).unsqueeze(1)
+    print(left_onehots.shape)
     return left_onehots, right_onehots, labels
 
 # Nich: add argument 'args', to pass more values

@@ -44,13 +44,13 @@ MODELNAME="conv_nonlinear"
 # Define the model name
 
 
-MODELNAME=model_checkpoint20
+MODELNAME=scalable_100_k=8_d=256_negsampleperpos=200_maxseq=100000_epoch=50_LR=0.001_batch=1000_device=None_loss=vib_without_sampling_seed=1_test10.model.epoch_1.checkpoint
 
 # Define the evaluation parameters
 SPECIES_LIST=("reference") #("reference" "plant" "marine")
 MODELLIST=conv_nonlinear
 DATA_DIR=${BASEFOLDER}/../dataset/
-MODEL_PATH=${BASEFOLDER}/${MODELNAME}.pt
+MODEL_PATH=${BASEFOLDER}/models/${MODELNAME}
 
 for SPECIES in ${SPECIES_LIST[@]}
 do

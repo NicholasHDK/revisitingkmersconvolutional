@@ -1,0 +1,12 @@
+
+15/05/2025 09:14:45model: conv_nonlinear, species: reference, sample: 5, binning
+recall_results: [1, 1, 1, 1, 1, 1, 1, 1, 1]
+f1_results: [0, 0, 0, 0, 0, 0, 0, 0, 0]
+threshold: 0.9
+
+
+15/05/2025 09:19:15model: conv_nonlinear, species: reference, sample: 6, binning
+recall_results: [1, 1, 1, 1, 1, 1, 1, 1, 1]
+f1_results: [0, 0, 0, 0, 0, 0, 0, 0, 0]
+threshold: 0.9
+
