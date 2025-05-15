@@ -568,15 +568,15 @@ def main_worker(
         filter_candidates = torch.zeros([max_value, 1, 4, args.k])
 
         for value in range(max_value):
-            digits = []
+            digits = [] # for storing base 4 digits
             temp = value
             for _ in range(args.k):
-                digits.append(temp % 4)
+                digits.append(temp % 4) # append base 4 digit
                 temp //= 4
             for i, digit in enumerate(digits):
-                filter_candidates[value, 0, digit, i] = 1
+                filter_candidates[value, 0, digit, i] = 1 # one hot encode the kmer
 
-        indices = torch.randperm(filter_candidates.size(0))[:args.num_filters]
+        indices = torch.randperm(filter_candidates.size(0))[:args.num_filters] # choose num_filters randomly
         filter_weights = filter_candidates[indices]
         model = VIBModel(k=k, out_dim=args.out_dim, seed=args.seed, n_filters=args.num_filters, filters=filter_weights)
     
@@ -603,7 +603,6 @@ def main_worker(
         torch.distributed.barrier()
         # Release the distributed training resources
         torch.distributed.destroy_process_group()
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train the model')
