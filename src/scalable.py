@@ -196,12 +196,15 @@ class PairDataset(Dataset):
 
 # Nich: define convolutional input layer as module
 class ConvFeatureExtractor(nn.Module):
-    def __init__(self, n_filters: int, k: int):
+    def __init__(self, n_filters: int, k: int, filters:Tensor = None):
         super().__init__()
         self.n_filters = n_filters
         self.k = k
         self.filters = nn.Conv2d(1, n_filters, kernel_size=(4, k))
-        
+        if filters is not None:
+            with torch.no_grad():
+                self.filters.weight.value = filters
+
     def forward(self, X: Tensor):
         """X is a tensor of shape (B, 1, 4, L)"""
         y = self.filters(X)
@@ -210,7 +213,7 @@ class ConvFeatureExtractor(nn.Module):
         return y
 
 class VIBModel(torch.nn.Module):
-    def __init__(self, k:int, out_dim:int=256, seed:int=0, n_filters: int = 136):
+    def __init__(self, k:int, out_dim:int=256, seed:int=0, n_filters: int = 136, filters: Tensor = None):
         """
         Initialize the VIB model
         """
@@ -225,8 +228,8 @@ class VIBModel(torch.nn.Module):
         set_seed(seed)
 
         # Nich: define convolutional input layer
-        self.conv_feature_extractor = ConvFeatureExtractor(n_filters, k)
-
+        self.conv_feature_extractor = ConvFeatureExtractor(n_filters, k, filters)
+        
         # Define the layers
         self.linear1_common = torch.nn.Linear(n_filters, 512, dtype=torch.float)
         self.batch1_common = torch.nn.BatchNorm1d(512, dtype=torch.float)
@@ -559,8 +562,23 @@ def main_worker(
         model = VIBModel(k=config['k'], out_dim=config['out_dim'], n_filters=args.num_filters)
         model.load_state_dict(state_dict)
         print("Loaded model")
+    # Nich: initialize filter weights to equivalent kmers
     else:
-        model = VIBModel(k=k, out_dim=args.out_dim, seed=args.seed, n_filters=args.num_filters)
+        max_value = 4 ** args.k  
+        filter_candidates = torch.zeros([max_value, 1, 4, args.k])
+
+        for value in range(max_value):
+            digits = []
+            temp = value
+            for _ in range(args.k):
+                digits.append(temp % 4)
+                temp //= 4
+            for i, digit in enumerate(digits):
+                filter_candidates[value, 0, digit, i] = 1
+
+        indices = torch.randperm(filter_candidates.size(0))[:args.num_filters]
+        filter_weights = filter_candidates[indices]
+        model = VIBModel(k=k, out_dim=args.out_dim, seed=args.seed, n_filters=args.num_filters, filters=filter_weights)
     
     if distributed:
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
