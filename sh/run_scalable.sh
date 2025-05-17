@@ -32,15 +32,15 @@ K=8
 OUT_DIM=256
 NEGSAMPLEPERPOS=200
 MAXSEQNUM=100000
-EPOCHNUM=50 #100 #300
+EPOCHNUM=1 #100 #300
 LR=0.001
 BATCH_SIZE=1000 #100000 #1000 #10000
 SAVE_EVERY=1 #50
-DISTRIBUTED=1 #0 #1
-DEVICE=None #gpu #None #gpu
+DISTRIBUTED=0 #0 #1
+DEVICE=gpu #gpu #None #gpu
 SEED=1
 TRAINED_MODEL_PATH="${BASEFOLDER}/models/scalable_100_k=8_d=256_negsampleperpos=200_maxseq=100000_epoch=50_LR=0.001_batch=8_device=None_loss=vib_without_sampling_seed=1_test9.model.epoch_3.checkpoint"
-START_EPOCH=3
+START_EPOCH=0
 NUM_FILTERS=136
 WORKERS_NUM=8
 

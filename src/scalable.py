@@ -26,6 +26,15 @@ from torch.nn import functional as F
 from torch import nn
 from torch.profiler import profile, record_function, ProfilerActivity
 
+getitem = []
+_collate_fn = []
+move_data_to_device = [] 
+total_time_to_load_data = []
+_process_batch = []
+conv_layer = []
+fc_layer = []
+calculate_loss = []
+backprop = []
 
 # Helper functions
 def set_seed(seed: int):
@@ -102,7 +111,7 @@ class PairDataset(Dataset):
             chosen_lines.sort()
         # Otherwise, read all the lines
         else:
-            chosen_lines = list(range(num_of_lines))
+             chosen_lines = list(range(num_of_lines))
 
         # Read the file
         left_dense, right_dense = [], []
@@ -189,9 +198,11 @@ class PairDataset(Dataset):
         return self.__indices.shape[1]
 
     def __getitem__(self, idx):
+        t0 = time.time()
         # self.__kmers[self.__indices[0, idx]], self.__kmers[self.__indices[1, idx]], self.__labels[idx]
         result = torch.index_select(self.__kmers, dim=0, index=self.__indices[0, idx]), torch.index_select(self.__kmers, dim=0, index=self.__indices[1, idx]), self.__labels[idx]
-
+        t1 = time.time()
+        getitem.append(t1 - t0)
         return result
 
 # Nich: define convolutional input layer as module
@@ -246,7 +257,7 @@ class VIBModel(torch.nn.Module):
         t0 = time.time()
         feats = self.conv_feature_extractor(kmers)
         t1 = time.time()
-        #print(f"time to calculate features: {t1 - t0}")
+        conv_layer.append(t1 - t0)
         h = self.linear1_common(feats)
         h = self.batch1_common(h)
         h = self.activation1_common(h)
@@ -254,7 +265,7 @@ class VIBModel(torch.nn.Module):
         mean = self.linear2_mean(h)
         std = torch.nn.functional.softplus(self.linear2_std(h)) + 1e-6
         t2 = time.time()
-        #print(f"time to do fully connected: {t2 - t1}")
+        fc_layer.append(t2 - t1)
         return mean, std
 
     def forward(self, left_kmers: torch.Tensor, right_kmers:torch.Tensor):
@@ -399,43 +410,40 @@ def train_batch(model, criterion, optimizer, left_kmers: torch.Tensor, right_kme
     t0 = time.time()
     batch_loss = criterion(left_mean, left_std, right_mean, right_std, labels)
     t1 = time.time()
-    #print(f"time to calculate loss: {t1 - t0}")
+    calculate_loss.append(t1 - t0)
     batch_loss.backward()
     # Update the model parameters
     optimizer.step()
     t2 = time.time()
-    #print(f"time to backpropagate: {t2-t1}")
+    backprop.append(t2 - t1)
     return batch_loss
 
 def train_single_epoch(device, model, criterion, optimizer, data_loader):
 
     epoch_loss = 0.
-    with profile(
-        activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
-        schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=1),
-        on_trace_ready=torch.profiler.tensorboard_trace_handler('./log'),
-    ) as prof:
+
+    t0 = time.time()
+    for data in data_loader:
+        t1 = time.time()
+        left_kmers, right_kmers, labels = data
+        left_kmers = left_kmers.to(device)
+        right_kmers = right_kmers.to(device)
+        labels = labels.squeeze().to(device)
+        t2 = time.time()
+        move_data_to_device.append(t2-t1)
+        total_time_to_load_data.append(t2-t0)
+
+        # Run the training for the current batch
         t0 = time.time()
-        for data in data_loader:
-            t1 = time.time()
-            #print(f"time to load data: {t1 - t0}")
-            left_kmers, right_kmers, labels = data
-            left_kmers = left_kmers.to(device)
-            right_kmers = right_kmers.to(device)
-            labels = labels.squeeze().to(device)
-            t0 = time.time()
+        batch_loss = train_batch(
+            model=model, criterion=criterion, optimizer=optimizer,
+            left_kmers=left_kmers, right_kmers=right_kmers, labels=labels
+        )
+        t1 = time.time()
+        _process_batch.append(t1 - t0)
+        t0 = time.time()
 
-            # Run the training for the current batch
-            batch_loss = train_batch(
-                model=model, criterion=criterion, optimizer=optimizer,
-                left_kmers=left_kmers, right_kmers=right_kmers, labels=labels
-            )
-            t1 = time.time()
-            #print(f"time to calculate loss: {t1 - t0}")
-            t0 = time.time()
-        prof.step()
-
-            # Get the epoch loss for reporting
+        # Get the epoch loss for reporting
         epoch_loss += batch_loss
 
     # Get the average epoch loss
@@ -472,6 +480,16 @@ def train(device, distributed, model, criterion, optimizer, data_loader, epoch_n
                     model.module.save(checkpoint_path)
             else:
                 model.save(checkpoint_path)
+        print("getitem", torch.tensor(getitem).std_mean())
+        print("collate_fn", torch.tensor(_collate_fn).std_mean())
+        print("move_data", torch.tensor(move_data_to_device).std_mean())
+        print("load_data_total", torch.tensor(total_time_to_load_data).std_mean())
+        print("process_batch_total", torch.tensor(_process_batch).std_mean())
+        print("conv_layer", torch.tensor(conv_layer).std_mean())
+        print("fc_layer", torch.tensor(fc_layer).std_mean())
+        print("calc_loss", torch.tensor(calculate_loss).std_mean())
+        print("backprop", torch.tensor(backprop).std_mean())
+              
 
         # # To ensure that all processes have finished the current epoch
         # if distributed:
@@ -517,10 +535,13 @@ def collate_fn(batch):
     convert dense representation to onehot
     batch: left reads, right reads, labels
     """
+    t0 = time.time()
     left_dense, right_dense, labels = torch.vstack([item[0] for item in batch]), torch.vstack([item[1] for item in batch]), torch.vstack([item[2] for item in batch])
     #convert to onehot encoding
     left_onehots = batched_dense_to_onehot(left_dense).unsqueeze(1) # add channel dimension
     right_onehots = batched_dense_to_onehot(right_dense).unsqueeze(1)
+    t1 = time.time()
+    _collate_fn.append(t1 - t0)
     return left_onehots, right_onehots, labels
 
 # Nich: add argument 'args', to pass more values
