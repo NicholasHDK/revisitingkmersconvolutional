@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=SCALABLE
+#SBATCH --job-name=scalable_distributed
 #SBATCH --output=%x_%j.out
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=200G
@@ -20,12 +20,12 @@ export NCCL_SOCKET_IFNAME=bond0
 
 # Define the global variables
 NAME=scalable
-BASEFOLDER=$HOME/revisitingkmers
+BASEFOLDER=$HOME/revisitingkmersconvolutional
 PYTHON="srun singularity exec --nv ${HOME}/project_base.sif python3"
 SCRIPT_PATH=${BASEFOLDER}/src/scalable.py
 
 # Model Parameters
-INPUT_PATH=$HOME/dataset/train_100k.csv
+INPUT_PATH=$HOME/dnabert-s_data/train_100k.csv
 LOSS_NAME="vib_without_sampling"
 POSTFIX="_test10"
 K=8
@@ -36,7 +36,7 @@ EPOCHNUM=1 #100 #300
 LR=0.001
 BATCH_SIZE=1000 #100000 #1000 #10000
 SAVE_EVERY=1 #50
-DISTRIBUTED=0 #0 #1
+DISTRIBUTED=1 #0 #1
 DEVICE=gpu #gpu #None #gpu
 SEED=1
 TRAINED_MODEL_PATH="${BASEFOLDER}/models/scalable_100_k=8_d=256_negsampleperpos=200_maxseq=100000_epoch=50_LR=0.001_batch=8_device=None_loss=vib_without_sampling_seed=1_test9.model.epoch_3.checkpoint"

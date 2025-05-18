@@ -31,6 +31,7 @@ _collate_fn = []
 move_data_to_device = [] 
 total_time_to_load_data = []
 _process_batch = []
+_full_batch_process = []
 conv_layer = []
 fc_layer = []
 calculate_loss = []
@@ -134,12 +135,15 @@ class PairDataset(Dataset):
         left_dense, right_dense = zip(*filtered)
         left_dense = list(left_dense)
         right_dense = list(right_dense)
-        left_dense = torch.stack(left_dense)
-        right_dense = torch.stack(right_dense)
-
+        left_dense = torch.vstack(left_dense).to(torch.int64)
+        right_dense = torch.vstack(right_dense).to(torch.int64)
+        print(left_dense.shape)
+        # Nich: convert to onehot, now with shape (N, 4, L)
+        left_onehots = batched_dense_to_onehot(left_dense).unsqueeze(1)
+        right_onehots = batched_dense_to_onehot(right_dense).unsqueeze(1)
         # Combine the left and right k-mer profiles.
         # The first half of the profiles are the left ones and the second half are the right ones
-        self.__kmers = torch.vstack([left_dense, right_dense]).long()
+        self.__kmers = torch.vstack([left_onehots, right_onehots]) # (2N, 4, L)
         
 
         if verbose:
@@ -272,7 +276,6 @@ class VIBModel(torch.nn.Module):
         """
         Forward pass
         """
-        # Nich: extract features
         left_mean, left_std = self.encoder(left_kmers)
         right_mean, right_std = self.encoder(right_kmers)
 
@@ -419,7 +422,7 @@ def train_batch(model, criterion, optimizer, left_kmers: torch.Tensor, right_kme
     return batch_loss
 
 def train_single_epoch(device, model, criterion, optimizer, data_loader):
-
+    t00 = time.time()
     epoch_loss = 0.
 
     t0 = time.time()
@@ -448,7 +451,7 @@ def train_single_epoch(device, model, criterion, optimizer, data_loader):
 
     # Get the average epoch loss
     average_epoch_loss = epoch_loss.item() / len(data_loader)
-
+    _full_batch_process.append(time.time() - t00)
     return average_epoch_loss
 
 def train(device, distributed, model, criterion, optimizer, data_loader, epoch_num: int, save_every:int, output_path, args):
@@ -480,20 +483,20 @@ def train(device, distributed, model, criterion, optimizer, data_loader, epoch_n
                     model.module.save(checkpoint_path)
             else:
                 model.save(checkpoint_path)
-        print("getitem", torch.tensor(getitem).std_mean())
-        print("collate_fn", torch.tensor(_collate_fn).std_mean())
-        print("move_data", torch.tensor(move_data_to_device).std_mean())
-        print("load_data_total", torch.tensor(total_time_to_load_data).std_mean())
-        print("process_batch_total", torch.tensor(_process_batch).std_mean())
-        print("conv_layer", torch.tensor(conv_layer).std_mean())
-        print("fc_layer", torch.tensor(fc_layer).std_mean())
-        print("calc_loss", torch.tensor(calculate_loss).std_mean())
-        print("backprop", torch.tensor(backprop).std_mean())
-              
+        print("getitem", torch.std_mean(torch.tensor(getitem)))
+        print("collate_fn", torch.std_mean(torch.tensor(_collate_fn)))
+        print("move_data", torch.std_mean(torch.tensor(move_data_to_device)))
+        print("load_data_total", torch.std_mean(torch.tensor(total_time_to_load_data)))
+        print("process_batch_total", torch.std_mean(torch.tensor(_process_batch)))
+        print("conv_layer", torch.std_mean(torch.tensor(conv_layer)))
+        print("fc_layer", torch.std_mean(torch.tensor(fc_layer)))
+        print("calc_loss", torch.std_mean(torch.tensor(calculate_loss)))
+        print("backprop", torch.std_mean(torch.tensor(backprop)))
+        print("full_batch_process", torch.std_mean(torch.tensor(_full_batch_process)))
 
         # # To ensure that all processes have finished the current epoch
-        # if distributed:
-        #     torch.distributed.barrier()
+        if distributed:
+            torch.distributed.barrier()
 
     if distributed:
         if device == 0:
@@ -524,7 +527,7 @@ def batched_dense_to_onehot(reads: Tensor) -> Tensor:
     """
     num_classes = 4
     # One-hot encoding using torch.nn.functional.one_hot, shape: (N, L, 4)
-    one_hot = torch.nn.functional.one_hot(reads, num_classes=num_classes).to(torch.float32)
+    one_hot = torch.nn.functional.one_hot(reads, num_classes=num_classes)
     # Move the one-hot channel to the correct position: (N, 4, L)
     one_hot = one_hot.permute(0, 2, 1)
     return one_hot
@@ -536,13 +539,13 @@ def collate_fn(batch):
     batch: left reads, right reads, labels
     """
     t0 = time.time()
-    left_dense, right_dense, labels = torch.vstack([item[0] for item in batch]), torch.vstack([item[1] for item in batch]), torch.vstack([item[2] for item in batch])
+    left_onehots, right_onehots, labels = torch.vstack([item[0] for item in batch]), torch.vstack([item[1] for item in batch]), torch.vstack([item[2] for item in batch])
     #convert to onehot encoding
-    left_onehots = batched_dense_to_onehot(left_dense).unsqueeze(1) # add channel dimension
-    right_onehots = batched_dense_to_onehot(right_dense).unsqueeze(1)
+    #left_onehots = batched_dense_to_onehot(left_dense).unsqueeze(1) # add channel dimension
+    #right_onehots = batched_dense_to_onehot(right_dense).unsqueeze(1)
     t1 = time.time()
     _collate_fn.append(t1 - t0)
-    return left_onehots, right_onehots, labels
+    return left_onehots.to(torch.float), right_onehots.to(torch.float), labels
 
 # Nich: add argument 'args', to pass more values
 def main_worker(
