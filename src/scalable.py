@@ -424,6 +424,7 @@ def train_batch(model, criterion, optimizer, left_kmers: torch.Tensor, right_kme
 def train_single_epoch(device, model, criterion, optimizer, data_loader):
     epoch_loss = 0.
     i = 0
+    t00 = time.time()
     t0 = time.time()
     for data in data_loader:
         print(f"batch {i}")
@@ -452,6 +453,7 @@ def train_single_epoch(device, model, criterion, optimizer, data_loader):
         # Get the epoch loss for reporting
         epoch_loss += batch_loss
 
+    print(f"epoch time: {time.time() - t00}")
     # Get the average epoch loss
     average_epoch_loss = epoch_loss.item() / len(data_loader)
     return average_epoch_loss
