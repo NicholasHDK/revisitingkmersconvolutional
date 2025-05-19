@@ -139,8 +139,8 @@ class PairDataset(Dataset):
         right_dense = torch.vstack(right_dense).to(torch.int64)
         print(left_dense.shape)
         # Nich: convert to onehot, now with shape (N, 4, L)
-        left_onehots = batched_dense_to_onehot(left_dense).unsqueeze(1)
-        right_onehots = batched_dense_to_onehot(right_dense).unsqueeze(1)
+        left_onehots = batched_dense_to_onehot(left_dense).unsqueeze(1)[:10000] # use only first 10000 seqs
+        right_onehots = batched_dense_to_onehot(right_dense).unsqueeze(1)[:10000] # for testing
         # Combine the left and right k-mer profiles.
         # The first half of the profiles are the left ones and the second half are the right ones
         self.__kmers = torch.vstack([left_onehots, right_onehots]) # (2N, 4, L)
@@ -422,12 +422,12 @@ def train_batch(model, criterion, optimizer, left_kmers: torch.Tensor, right_kme
     return batch_loss
 
 def train_single_epoch(device, model, criterion, optimizer, data_loader):
-    t00 = time.time()
     epoch_loss = 0.
 
     t0 = time.time()
     for data in data_loader:
         t1 = time.time()
+        _collate_fn.append(t1 - t0)
         left_kmers, right_kmers, labels = data
         left_kmers = left_kmers.to(device)
         right_kmers = right_kmers.to(device)
@@ -437,13 +437,14 @@ def train_single_epoch(device, model, criterion, optimizer, data_loader):
         total_time_to_load_data.append(t2-t0)
 
         # Run the training for the current batch
-        t0 = time.time()
+        t3 = time.time()
         batch_loss = train_batch(
             model=model, criterion=criterion, optimizer=optimizer,
             left_kmers=left_kmers, right_kmers=right_kmers, labels=labels
         )
-        t1 = time.time()
-        _process_batch.append(t1 - t0)
+        t4 = time.time()
+        _process_batch.append(t4 - t3)
+        _full_batch_process.append(t4-t0)
         t0 = time.time()
 
         # Get the epoch loss for reporting
@@ -451,7 +452,6 @@ def train_single_epoch(device, model, criterion, optimizer, data_loader):
 
     # Get the average epoch loss
     average_epoch_loss = epoch_loss.item() / len(data_loader)
-    _full_batch_process.append(time.time() - t00)
     return average_epoch_loss
 
 def train(device, distributed, model, criterion, optimizer, data_loader, epoch_num: int, save_every:int, output_path, args):
@@ -553,6 +553,30 @@ def main_worker(
         max_seq_num: int, k: int, out_dim: int, lr:float, epoch_num:int, batch_size:int, workers_num, save_every: int,
         loss_name: str, seed: int, args, verbose:bool=True
     ):
+    print("in main_worker")
+
+    # Nich: move all cuda code into main_worker to avoid bugs
+    if args.distributed:
+        assert torch.cuda.is_available(), "Distributed training requires CUDA"
+        nodes_num = 1
+        world_size = torch.cuda.device_count() * nodes_num
+    else:
+        if args.device == "gpu":
+            assert torch.cuda.is_available(), "GPU is not available"
+            device = torch.device(f"cuda")
+        elif args.device == "mps":
+            assert torch.backends.mps.is_available(), "MPS is not available"
+            device = torch.device("mps")
+        else:
+            device = torch.device("cpu")
+    print(f"+ Information")
+    if args.distributed:
+        print(f"\t- Distributed training is activated with {world_size} GPUs")
+    else:
+        print(f"\t- No distributed training")
+        print(f"\t- Device: {device}")
+    print(f"\t- Loss function: {args.loss_name}")
+    print(f"\t- Batch size: {args.batch_size}")
     ### Initialize the device
     if distributed:
         # Set the environment variables for distributed training if not already set
@@ -563,7 +587,7 @@ def main_worker(
         print(f"+ MASTER_ADDR: {os.environ['MASTER_ADDR']} and MASTER_PORT: {os.environ['MASTER_PORT']}")
         torch.cuda.set_device(device)
         torch.distributed.init_process_group(backend='nccl', rank=device, world_size=world_size)
-
+    print("Creating data set")
     ### Read the dataset and construct the data loader
     training_dataset = PairDataset(
         file_path=input_file_path, k=k, neg_sample_per_pos=neg_sample_per_pos, max_seq_num=max_seq_num, seed=seed
@@ -654,29 +678,10 @@ if __name__ == "__main__":
 
     # Define the world size, i.e. total number of processes participating in the distributed training job
     world_size = None
-    if args.distributed:
-        assert torch.cuda.is_available(), "Distributed training requires CUDA"
-        nodes_num = 1
-        world_size = torch.cuda.device_count() * nodes_num
-    else:
-        if args.device == "gpu":
-            assert torch.cuda.is_available(), "GPU is not available"
-            device = torch.device(f"cuda")
-        elif args.device == "mps":
-            assert torch.backends.mps.is_available(), "MPS is not available"
-            device = torch.device("mps")
-        else:
-            device = torch.device("cpu")
+    
 
 
-    print(f"+ Information")
-    if args.distributed:
-        print(f"\t- Distributed training is activated with {world_size} GPUs")
-    else:
-        print(f"\t- No distributed training")
-        print(f"\t- Device: {device}")
-    print(f"\t- Loss function: {args.loss_name}")
-    print(f"\t- Batch size: {args.batch_size}")
+    
 
     # Nich: pass 'args' along with arguments
     arguments = (
