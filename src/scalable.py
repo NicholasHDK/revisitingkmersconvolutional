@@ -28,6 +28,7 @@ from torch.profiler import profile, record_function, ProfilerActivity
 
 getitem = []
 _collate_fn = []
+_load_data_to_loop = []
 move_data_to_device = [] 
 total_time_to_load_data = []
 _process_batch = []
@@ -425,10 +426,8 @@ def train_single_epoch(device, model, criterion, optimizer, data_loader):
     t00 = time.time()
     t0 = time.time()
     for data in data_loader:
-        print(f"batch {i}")
-        i += 1
         t1 = time.time()
-        _collate_fn.append(t1 - t0)
+
         left_kmers, right_kmers, labels = data
         left_kmers = left_kmers.to(device)
         right_kmers = right_kmers.to(device)
