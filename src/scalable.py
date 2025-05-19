@@ -137,7 +137,6 @@ class PairDataset(Dataset):
         right_dense = list(right_dense)
         left_dense = torch.vstack(left_dense).to(torch.int64)
         right_dense = torch.vstack(right_dense).to(torch.int64)
-        print(left_dense.shape)
         # Nich: convert to onehot, now with shape (N, 4, L)
         left_onehots = batched_dense_to_onehot(left_dense).unsqueeze(1)[:10000] # use only first 10000 seqs
         right_onehots = batched_dense_to_onehot(right_dense).unsqueeze(1)[:10000] # for testing
@@ -145,12 +144,11 @@ class PairDataset(Dataset):
         # The first half of the profiles are the left ones and the second half are the right ones
         self.__kmers = torch.vstack([left_onehots, right_onehots]) # (2N, 4, L)
         
-
         if verbose:
             print(f"\t- Completed in {time.time() - init_time:.2f} seconds.")
             # print the time information in 2 decimal points
             print(f"\t- The input file contains: {num_of_lines} sequence pairs.")
-            print(f"\t- For training, {max_seq_num} sequence pairs will be used.")
+            print(f"\t- For training, {self.__kmers.shape[0]} sequences will be used.")
 
         # Construct the indices storing the positive and negative pairs
         if verbose:
