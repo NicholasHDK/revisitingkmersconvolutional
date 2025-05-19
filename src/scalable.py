@@ -139,8 +139,8 @@ class PairDataset(Dataset):
         left_dense = torch.vstack(left_dense).to(torch.int64)
         right_dense = torch.vstack(right_dense).to(torch.int64)
         # Nich: convert to onehot, now with shape (N, 4, L)
-        left_onehots = batched_dense_to_onehot(left_dense).unsqueeze(1)[:10000] # use only first 10000 seqs
-        right_onehots = batched_dense_to_onehot(right_dense).unsqueeze(1)[:10000] # for testing
+        left_onehots = batched_dense_to_onehot(left_dense).unsqueeze(1)[:1000]   # use only first n seqs
+        right_onehots = batched_dense_to_onehot(right_dense).unsqueeze(1)[:1000] # for testing
         # Combine the left and right k-mer profiles.
         # The first half of the profiles are the left ones and the second half are the right ones
         self.__kmers = torch.vstack([left_onehots, right_onehots]) # (2N, 4, L)
