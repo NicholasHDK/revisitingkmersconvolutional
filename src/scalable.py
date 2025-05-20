@@ -143,7 +143,7 @@ class PairDataset(Dataset):
         right_onehots = batched_dense_to_onehot(right_dense).unsqueeze(1)[:1000] # for testing
         # Combine the left and right k-mer profiles.
         # The first half of the profiles are the left ones and the second half are the right ones
-        self.__kmers = torch.vstack([left_onehots, right_onehots]) # (2N, 4, L)
+        self.__kmers = torch.vstack([left_onehots, right_onehots]).bool() # (2N, 4, L)
         
         if verbose:
             print(f"\t- Completed in {time.time() - init_time:.2f} seconds.")
@@ -423,14 +423,13 @@ def train_batch(model, criterion, optimizer, left_kmers: torch.Tensor, right_kme
 def train_single_epoch(device, model, criterion, optimizer, data_loader):
     epoch_loss = 0.
     i = 0
-    t00 = time.time()
     t0 = time.time()
     for data in data_loader:
         t1 = time.time()
 
         left_kmers, right_kmers, labels = data
-        left_kmers = left_kmers.to(device)
-        right_kmers = right_kmers.to(device)
+        left_kmers = left_kmers.to(device).float()
+        right_kmers = right_kmers.to(device).float()
         labels = labels.squeeze().to(device)
         t2 = time.time()
         move_data_to_device.append(t2-t1)
@@ -450,7 +449,6 @@ def train_single_epoch(device, model, criterion, optimizer, data_loader):
         # Get the epoch loss for reporting
         epoch_loss += batch_loss
 
-    print(f"epoch time: {time.time() - t00}")
     # Get the average epoch loss
     average_epoch_loss = epoch_loss.item() / len(data_loader)
     return average_epoch_loss
@@ -516,7 +514,7 @@ def dense_to_onehot(read: Tensor) -> Tensor:
         result[3, read == 3] = 1
         return result
 
-def batched_dense_to_onehot(reads: Tensor) -> Tensor:
+def batched_dense_to_onehot(reads: torch.int64) -> Tensor:
     """
     Convert a batch of DNA sequences from dense encoding to one-hot encoding.
     
@@ -546,7 +544,7 @@ def collate_fn(batch):
     #right_onehots = batched_dense_to_onehot(right_dense).unsqueeze(1)
     t1 = time.time()
     _collate_fn.append(t1 - t0)
-    return left_onehots.to(torch.float), right_onehots.to(torch.float), labels
+    return left_onehots, right_onehots, labels
 
 # Nich: add argument 'args', to pass more values
 def main_worker(
@@ -556,28 +554,7 @@ def main_worker(
     ):
     print("in main_worker")
 
-    # Nich: move all cuda code into main_worker to avoid bugs
-    if args.distributed:
-        assert torch.cuda.is_available(), "Distributed training requires CUDA"
-        nodes_num = 1
-        world_size = torch.cuda.device_count() * nodes_num
-    else:
-        if args.device == "gpu":
-            assert torch.cuda.is_available(), "GPU is not available"
-            device = torch.device(f"cuda")
-        elif args.device == "mps":
-            assert torch.backends.mps.is_available(), "MPS is not available"
-            device = torch.device("mps")
-        else:
-            device = torch.device("cpu")
-    print(f"+ Information")
-    if args.distributed:
-        print(f"\t- Distributed training is activated with {world_size} GPUs")
-    else:
-        print(f"\t- No distributed training")
-        print(f"\t- Device: {device}")
-    print(f"\t- Loss function: {args.loss_name}")
-    print(f"\t- Batch size: {args.batch_size}")
+    
     ### Initialize the device
     if distributed:
         # Set the environment variables for distributed training if not already set
@@ -680,7 +657,28 @@ if __name__ == "__main__":
     # Define the world size, i.e. total number of processes participating in the distributed training job
     world_size = None
     
-
+    # Nich: move all cuda code into main_worker to avoid bugs
+    if args.distributed:
+        assert torch.cuda.is_available(), "Distributed training requires CUDA"
+        nodes_num = 1
+        world_size = torch.cuda.device_count() * nodes_num
+    else:
+        if args.device == "gpu":
+            assert torch.cuda.is_available(), "GPU is not available"
+            device = torch.device(f"cuda")
+        elif args.device == "mps":
+            assert torch.backends.mps.is_available(), "MPS is not available"
+            device = torch.device("mps")
+        else:
+            device = torch.device("cpu")
+    print(f"+ Information")
+    if args.distributed:
+        print(f"\t- Distributed training is activated with {world_size} GPUs")
+    else:
+        print(f"\t- No distributed training")
+        print(f"\t- Device: {device}")
+    print(f"\t- Loss function: {args.loss_name}")
+    print(f"\t- Batch size: {args.batch_size}")
 
     
 
