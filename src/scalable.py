@@ -25,6 +25,7 @@ from typing import List
 from torch.nn import functional as F
 from torch import nn
 from torch.profiler import profile, record_function, ProfilerActivity
+from typing import Callable
 
 getitem = []
 _collate_fn = []
@@ -93,12 +94,11 @@ class PairDataset(Dataset):
         self.__indices = None # A tensor of shape L x 2, storing the indices of the positive and negative pairs
         self.__labels = None  # A tensor of shape L, storing the labels of the pairs
         self.__kc = KmerConverter(k)
-        self.__transform_func = self.dense_encoding
         self.__neg_sample_per_pos = neg_sample_per_pos
-        self.max_seq_len = 10000 # TODO: shouldn't be hardcoded
+
         # Set the seed
         set_seed(seed)
-        assert neg_sample_per_pos > 0
+
         if verbose:
             print(f"+ Reading the data file.")
             print(f"\t- File path: {file_path}")
@@ -113,43 +113,30 @@ class PairDataset(Dataset):
             chosen_lines.sort()
         # Otherwise, read all the lines
         else:
-             chosen_lines = list(range(num_of_lines))
+            chosen_lines = list(range(num_of_lines))
 
         # Read the file
-        left_dense, right_dense = [], []
+        left_kmer_profiles, right_kmer_profiles = [], []
         # with open(file_path, 'r') as f:
         #     reader = list(csv.reader(f, delimiter=','))
         lines = pd.read_csv(file_path, sep=',', header=None).iloc[chosen_lines].values.tolist()
         for line in lines:
             left_seq, right_seq = line[0], line[1]
-            # Nich: use transform func to convert reads to dense encoding (as discussed in meetings)
-            left_dense.append(self.__transform_func(left_seq))
-            right_dense.append(self.__transform_func(right_seq))
-        
-        # Nich: Filter pairs where both sequences are exactly length 10000
-        filtered = [
-            (l, r) for l, r in zip(left_dense, right_dense)
-            if len(l) == 10000 and len(r) == 10000
-        ]
+            left_kmer_profiles.append(self.__kc.seq2kmer(left_seq))
+            right_kmer_profiles.append(self.__kc.seq2kmer(right_seq))
 
-        # Unzip the filtered result back into two lists
-        left_dense, right_dense = zip(*filtered)
-        left_dense = list(left_dense)
-        right_dense = list(right_dense)
-        left_dense = torch.vstack(left_dense).to(torch.int64)
-        right_dense = torch.vstack(right_dense).to(torch.int64)
-        # Nich: convert to onehot, now with shape (N, 4, L)
-        left_onehots = batched_dense_to_onehot(left_dense).unsqueeze(1)[:1000]   # use only first n seqs
-        right_onehots = batched_dense_to_onehot(right_dense).unsqueeze(1)[:1000] # for testing
         # Combine the left and right k-mer profiles.
         # The first half of the profiles are the left ones and the second half are the right ones
-        self.__kmers = torch.vstack([left_onehots, right_onehots]).bool() # (2N, 4, L)
-        
+        left_kmer_profiles = torch.tensor(np.array(left_kmer_profiles))
+        right_kmer_profiles = torch.tensor(np.array(right_kmer_profiles))
+
+        self.__kmers = torch.vstack([left_kmer_profiles, right_kmer_profiles]).to(torch.float)
+
         if verbose:
             print(f"\t- Completed in {time.time() - init_time:.2f} seconds.")
             # print the time information in 2 decimal points
             print(f"\t- The input file contains: {num_of_lines} sequence pairs.")
-            print(f"\t- For training, {self.__kmers.shape[0]} sequences will be used.")
+            print(f"\t- For training, {max_seq_num} sequence pairs will be used.")
 
         # Construct the indices storing the positive and negative pairs
         if verbose:
@@ -179,21 +166,6 @@ class PairDataset(Dataset):
             print(f"\t- Training dataset contains {pos_indices.shape[1]} positive pairs.")
             print(f"\t- Training dataset contains {neg_indices.shape[1]} negative pairs.")
 
-    def dense_encoding(self, read: str) -> Tensor:
-        seq = np.array(read, dtype=np.bytes_).reshape(1, -1)
-        seq = seq.view(np.uint8).squeeze()
-        result = torch.zeros(seq.shape[-1], dtype=torch.uint8)
-        result[seq == 65] = 0
-        result[seq == 67] = 1
-        result[seq == 71] = 2
-        result[seq == 84] = 3
-        return result
-    
-    def homogenize_dense(self, read: Tensor, max_seq_len) -> List[Tensor]:
-        """Ensure input read is of given max_seq_len - used to ensure all reads have same length"""        
-        read = F.pad(read, (-1, max_seq_len - read.shape[-1]))
-        return read
-
     def __len__(self):
         """
         Return the number of pairs
@@ -202,32 +174,44 @@ class PairDataset(Dataset):
 
     def __getitem__(self, idx):
         t0 = time.time()
-        # self.__kmers[self.__indices[0, idx]], self.__kmers[self.__indices[1, idx]], self.__labels[idx]
         result = torch.index_select(self.__kmers, dim=0, index=self.__indices[0, idx]), torch.index_select(self.__kmers, dim=0, index=self.__indices[1, idx]), self.__labels[idx]
         t1 = time.time()
         getitem.append(t1 - t0)
+        # self.__kmers[self.__indices[0, idx]], self.__kmers[self.__indices[1, idx]], self.__labels[idx]
         return result
 
 # Nich: define convolutional input layer as module
 class ConvFeatureExtractor(nn.Module):
-    def __init__(self, n_filters: int, k: int, filters:Tensor = None):
+    def __init__(self, k: int, device, aggregate_fn: Callable[[Tensor], Tensor] = torch.mean):
         super().__init__()
-        self.n_filters = n_filters
         self.k = k
-        self.filters = nn.Conv2d(1, n_filters, kernel_size=(4, k))
-        if filters is not None:
-            with torch.no_grad():
-                self.filters.weight.value = filters
-
-    def forward(self, X: Tensor):
-        """X is a tensor of shape (B, 1, 4, L)"""
-        y = self.filters(X)
-        y = y.mean(dim=-1)
-        y = y.squeeze()
+        self.aggregate_fn = aggregate_fn
+        # create equivalent kmers as one-hots (use combinations_with_replacement from itertools)
+        from itertools import product
+        self.one_hot_kmer_idcs = torch.tensor(list(product([0,1,2,3], repeat=k))).long().to(device)
+        one_hot_kmers = torch.stack([
+            torch.nn.functional.one_hot(torch.tensor(indices), num_classes = 4) 
+            for indices in list(product([0,1,2,3], repeat=k))
+            ]).permute(0,2,1)
+        self.kmer_params = torch.nn.Parameter(one_hot_kmers.float())
+        
+    def convolve(self, freq: Tensor):
+        """
+        Faster convolve, taking advantage of the fact that sequences are one-hot vectors.
+        Args:
+            freq: kmer frequencies with shape (B, 4**k)
+        """
+        matches = torch.gather(self.kmer_params, 1, self.one_hot_kmer_idcs.unsqueeze(1)).squeeze()
+        result = self.aggregate_fn(matches)*freq
+        return result
+        
+    def forward(self, frequencies: Tensor):
+        """frequencies is a tensor of shape (B, 4**k)"""
+        y = self.convolve(frequencies)
         return y
 
 class VIBModel(torch.nn.Module):
-    def __init__(self, k:int, out_dim:int=256, seed:int=0, n_filters: int = 136, filters: Tensor = None):
+    def __init__(self, k:int, out_dim:int=256, seed:int=0, device='cpu'):
         """
         Initialize the VIB model
         """
@@ -242,10 +226,10 @@ class VIBModel(torch.nn.Module):
         set_seed(seed)
 
         # Nich: define convolutional input layer
-        self.conv_feature_extractor = ConvFeatureExtractor(n_filters, k, filters)
+        self.conv_feature_extractor = ConvFeatureExtractor(k, device)
         
         # Define the layers
-        self.linear1_common = torch.nn.Linear(n_filters, 512, dtype=torch.float)
+        self.linear1_common = torch.nn.Linear(4**k, 512, dtype=torch.float)
         self.batch1_common = torch.nn.BatchNorm1d(512, dtype=torch.float)
         self.activation1_common = torch.nn.Sigmoid()
         self.dropout1_common = torch.nn.Dropout(0.2)
@@ -426,11 +410,10 @@ def train_single_epoch(device, model, criterion, optimizer, data_loader):
     t0 = time.time()
     for data in data_loader:
         t1 = time.time()
-
         left_kmers, right_kmers, labels = data
-        left_kmers = left_kmers.to(device).float()
-        right_kmers = right_kmers.to(device).float()
-        labels = labels.squeeze().to(device)
+        left_kmers = left_kmers.reshape(-1, left_kmers.shape[-1]).to(device)
+        right_kmers = right_kmers.reshape(-1, right_kmers.shape[-1]).to(device)
+        labels = labels.reshape(-1).to(device)
         t2 = time.time()
         move_data_to_device.append(t2-t1)
         total_time_to_load_data.append(t2-t0)
@@ -482,16 +465,17 @@ def train(device, distributed, model, criterion, optimizer, data_loader, epoch_n
                     model.module.save(checkpoint_path)
             else:
                 model.save(checkpoint_path)
-        print("getitem", torch.std_mean(torch.tensor(getitem)))
-        print("collate_fn", torch.std_mean(torch.tensor(_collate_fn)))
-        print("move_data", torch.std_mean(torch.tensor(move_data_to_device)))
-        print("load_data_total", torch.std_mean(torch.tensor(total_time_to_load_data)))
-        print("process_batch_total", torch.std_mean(torch.tensor(_process_batch)))
-        print("conv_layer", torch.std_mean(torch.tensor(conv_layer)))
-        print("fc_layer", torch.std_mean(torch.tensor(fc_layer)))
-        print("calc_loss", torch.std_mean(torch.tensor(calculate_loss)))
-        print("backprop", torch.std_mean(torch.tensor(backprop)))
-        print("full_batch_process", torch.std_mean(torch.tensor(_full_batch_process)))
+        #print(len(_full_batch_process))
+        #print("getitem", torch.std_mean(torch.tensor(getitem)))
+        #print("collate_fn", torch.std_mean(torch.tensor(_collate_fn)))
+        #print("move_data", torch.std_mean(torch.tensor(move_data_to_device)))
+        #print("load_data_total", torch.std_mean(torch.tensor(total_time_to_load_data)))
+        #print("process_batch_total", torch.std_mean(torch.tensor(_process_batch)))
+        #print("conv_layer", torch.std_mean(torch.tensor(conv_layer)))
+        #print("fc_layer", torch.std_mean(torch.tensor(fc_layer)))
+        #print("calc_loss", torch.std_mean(torch.tensor(calculate_loss)))
+        #print("backprop", torch.std_mean(torch.tensor(backprop)))
+        #print("full_batch_process", torch.std_mean(torch.tensor(_full_batch_process)))
 
         # # To ensure that all processes have finished the current epoch
         if distributed:
@@ -576,7 +560,7 @@ def main_worker(
     training_loader = DataLoader(
         training_dataset, batch_size=batch_size, num_workers=workers_num, pin_memory=True,
         sampler=DistributedSampler(training_dataset) if distributed else None,
-        shuffle=False if distributed else True, collate_fn=collate_fn
+        shuffle=False if distributed else True#, collate_fncollate_fn
     )
 
     ### Define the model
@@ -590,21 +574,7 @@ def main_worker(
         print("Loaded model")
     # Nich: initialize filter weights to equivalent kmers
     else:
-        max_value = 4 ** args.k  
-        filter_candidates = torch.zeros([max_value, 1, 4, args.k])
-
-        for value in range(max_value):
-            digits = [] # for storing base 4 digits
-            temp = value
-            for _ in range(args.k):
-                digits.append(temp % 4) # append base 4 digit
-                temp //= 4
-            for i, digit in enumerate(digits):
-                filter_candidates[value, 0, digit, i] = 1 # one hot encode the kmer
-
-        indices = torch.randperm(filter_candidates.size(0))[:args.num_filters] # choose num_filters randomly
-        filter_weights = filter_candidates[indices]
-        model = VIBModel(k=k, out_dim=args.out_dim, seed=args.seed, n_filters=args.num_filters, filters=filter_weights)
+        model = VIBModel(k=k, out_dim=args.out_dim, seed=args.seed, device=device)
     
     if distributed:
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
