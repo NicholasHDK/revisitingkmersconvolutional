@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=scalable_distributed
+#SBATCH --job-name=scalable_non_distributed
 #SBATCH --output=%x_%j.out
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=200G
@@ -28,14 +28,14 @@ SCRIPT_PATH=${BASEFOLDER}/src/scalable.py
 INPUT_PATH=$HOME/dnabert-s_data/train_100k.csv
 LOSS_NAME="vib_without_sampling"
 POSTFIX="_test10"
-K=8
+K=4
 OUT_DIM=256
 NEGSAMPLEPERPOS=200
-MAXSEQNUM=100000
-EPOCHNUM=1 #100 #300
+MAXSEQNUM=100
+EPOCHNUM=100 #100 #300
 LR=0.001
-BATCH_SIZE=1000 #100000 #1000 #10000
-SAVE_EVERY=1 #50
+BATCH_SIZE=10000 #100000 #1000 #10000
+SAVE_EVERY=5 #50
 DISTRIBUTED=1 #0 #1
 DEVICE=gpu #gpu #None #gpu
 SEED=1
@@ -43,7 +43,7 @@ TRAINED_MODEL_PATH="${BASEFOLDER}/models/scalable_100_k=8_d=256_negsampleperpos=
 START_EPOCH=0
 NUM_FILTERS=136
 WORKERS_NUM=8
-
+MAXSEQNUM=100000
 # Define the output path
 NAME=${NAME}_100_k=${K}_d=${OUT_DIM}_negsampleperpos=${NEGSAMPLEPERPOS}
 NAME=${NAME}_maxseq=${MAXSEQNUM}_epoch=${EPOCHNUM}_LR=${LR}_batch=${BATCH_SIZE}

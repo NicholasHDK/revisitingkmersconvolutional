@@ -120,7 +120,7 @@ class PairDataset(Dataset):
         # with open(file_path, 'r') as f:
         #     reader = list(csv.reader(f, delimiter=','))
         lines = pd.read_csv(file_path, sep=',', header=None).iloc[chosen_lines].values.tolist()
-        for line in lines:
+        for line in lines[:max_seq_num]:
             left_seq, right_seq = line[0], line[1]
             left_kmer_profiles.append(self.__kc.seq2kmer(left_seq))
             right_kmer_profiles.append(self.__kc.seq2kmer(right_seq))
@@ -182,18 +182,25 @@ class PairDataset(Dataset):
 
 # Nich: define convolutional input layer as module
 class ConvFeatureExtractor(nn.Module):
-    def __init__(self, k: int, device, aggregate_fn: Callable[[Tensor], Tensor] = torch.mean):
+    def __init__(self, k: int, 
+        device, 
+        aggregate_fn: Callable[[Tensor], Tensor] = torch.sum
+        ):
         super().__init__()
         self.k = k
         self.aggregate_fn = aggregate_fn
-        # create equivalent kmers as one-hots (use combinations_with_replacement from itertools)
+        # create equivalent kmers as one-hots
         from itertools import product
-        self.one_hot_kmer_idcs = torch.tensor(list(product([0,1,2,3], repeat=k))).long().to(device)
+        one_hot_kmer_idcs = torch.tensor(list(product([0,1,2,3], repeat=k))).long() # (4**k, k)
+        self.gather_idcs = torch.stack([
+            torch.roll(one_hot_kmer_idcs, i, 0) 
+            for i in range(len(one_hot_kmer_idcs))
+            ]).to(device) #(4**k, 4**k, k)
         one_hot_kmers = torch.stack([
             torch.nn.functional.one_hot(torch.tensor(indices), num_classes = 4) 
             for indices in list(product([0,1,2,3], repeat=k))
-            ]).permute(0,2,1)
-        self.kmer_params = torch.nn.Parameter(one_hot_kmers.float())
+            ]).permute(0,2,1) 
+        self.kmer_params = one_hot_kmers.to(device) # (n_filters, 4, k)
         
     def convolve(self, freq: Tensor):
         """
@@ -201,10 +208,19 @@ class ConvFeatureExtractor(nn.Module):
         Args:
             freq: kmer frequencies with shape (B, 4**k)
         """
-        matches = torch.gather(self.kmer_params, 1, self.one_hot_kmer_idcs.unsqueeze(1)).squeeze()
-        result = self.aggregate_fn(matches)*freq
-        return result
+        # torch.gather gets values from self.kmer_params where self.one_hot_kmers is 1, i.e. it is equal to convolution
+
+                               #(4**k, n_filters, 4, k)                            
+        matches = torch.gather(torch.stack([self.kmer_params] * 4**self.k), 2, self.gather_idcs.unsqueeze(2)) # (4**k, n_filters, 1, k)
         
+        matches = matches.squeeze() # (4**k, n_filters, k)
+        matches = matches.float()
+        matches = matches.sum(dim=-1) # sum over k dimension (equivalent to the sum in convolution)
+        matches = torch.where(matches == self.k, 1, 0).float() # for sanity check - this ensures equality to original "revisiting kmers" code
+        result = self.aggregate_fn(matches)*freq # pooling layer
+        return result
+
+      
     def forward(self, frequencies: Tensor):
         """frequencies is a tensor of shape (B, 4**k)"""
         y = self.convolve(frequencies)
@@ -454,7 +470,8 @@ def train(device, distributed, model, criterion, optimizer, data_loader, epoch_n
         loss = train_single_epoch(
             device=device, model=model, criterion=criterion, optimizer=optimizer, data_loader=data_loader
         )
-        print(f"\t- Epoch: {current_epoch}/{epoch_num} - Loss: {loss} ({time.time() - init_time:.2f} secs)")
+        if not distributed or device == 0:
+            print(f"\t- Epoch: {current_epoch}/{epoch_num} - Loss: {loss} ({time.time() - init_time:.2f} secs)")
 
         ## Save the checkpoint if necessary
         if save_every > 0 and (current_epoch + 1) % save_every == 0:
@@ -465,22 +482,22 @@ def train(device, distributed, model, criterion, optimizer, data_loader, epoch_n
                     model.module.save(checkpoint_path)
             else:
                 model.save(checkpoint_path)
-        #print(len(_full_batch_process))
-        #print("getitem", torch.std_mean(torch.tensor(getitem)))
-        #print("collate_fn", torch.std_mean(torch.tensor(_collate_fn)))
-        #print("move_data", torch.std_mean(torch.tensor(move_data_to_device)))
-        #print("load_data_total", torch.std_mean(torch.tensor(total_time_to_load_data)))
-        #print("process_batch_total", torch.std_mean(torch.tensor(_process_batch)))
-        #print("conv_layer", torch.std_mean(torch.tensor(conv_layer)))
-        #print("fc_layer", torch.std_mean(torch.tensor(fc_layer)))
-        #print("calc_loss", torch.std_mean(torch.tensor(calculate_loss)))
-        #print("backprop", torch.std_mean(torch.tensor(backprop)))
-        #print("full_batch_process", torch.std_mean(torch.tensor(_full_batch_process)))
+
 
         # # To ensure that all processes have finished the current epoch
         if distributed:
             torch.distributed.barrier()
-
+    if not distributed or device == 0:    
+        print("getitem", torch.std_mean(torch.tensor(getitem)))
+        print("collate_fn", torch.std_mean(torch.tensor(_collate_fn)))
+        print("move_data", torch.std_mean(torch.tensor(move_data_to_device)))
+        print("load_data_total", torch.std_mean(torch.tensor(total_time_to_load_data)))
+        print("process_batch_total", torch.std_mean(torch.tensor(_process_batch)))
+        print("conv_layer", torch.std_mean(torch.tensor(conv_layer)))
+        print("fc_layer", torch.std_mean(torch.tensor(fc_layer)))
+        print("calc_loss", torch.std_mean(torch.tensor(calculate_loss)))
+        print("backprop", torch.std_mean(torch.tensor(backprop)))
+        print("full_batch_process", torch.std_mean(torch.tensor(_full_batch_process)))
     if distributed:
         if device == 0:
             model.module.save(output_path)
@@ -536,7 +553,6 @@ def main_worker(
         max_seq_num: int, k: int, out_dim: int, lr:float, epoch_num:int, batch_size:int, workers_num, save_every: int,
         loss_name: str, seed: int, args, verbose:bool=True
     ):
-    print("in main_worker")
 
     
     ### Initialize the device
@@ -663,3 +679,4 @@ if __name__ == "__main__":
     else:
         main_worker(*((device,) + arguments))
     print("Completed.")
+
