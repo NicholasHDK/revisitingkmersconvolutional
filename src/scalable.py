@@ -189,18 +189,25 @@ class ConvFeatureExtractor(nn.Module):
         super().__init__()
         self.k = k
         self.aggregate_fn = aggregate_fn
+
         # create equivalent kmers as one-hots
         from itertools import product
         one_hot_kmer_idcs = torch.tensor(list(product([0,1,2,3], repeat=k))).long() # (4**k, k)
+
+        # create indices to gather from - I use torch.roll to ensure that each filter interacts with each possible k-mer
         self.gather_idcs = torch.stack([
             torch.roll(one_hot_kmer_idcs, i, 0) 
             for i in range(len(one_hot_kmer_idcs))
             ]).to(device) #(4**k, 4**k, k)
+
         one_hot_kmers = torch.stack([
             torch.nn.functional.one_hot(torch.tensor(indices), num_classes = 4) 
             for indices in list(product([0,1,2,3], repeat=k))
             ]).permute(0,2,1) 
-        self.kmer_params = one_hot_kmers.to(device) # (n_filters, 4, k)
+        self.kmer_params = torch.nn.Parameter(one_hot_kmers.float()) # (n_filters, 4, k)
+        for name, param in self.named_parameters():
+            if "kmer_params" in name:
+                print(name, param.grad is None)
         
     def convolve(self, freq: Tensor):
         """
@@ -211,12 +218,11 @@ class ConvFeatureExtractor(nn.Module):
         # torch.gather gets values from self.kmer_params where self.one_hot_kmers is 1, i.e. it is equal to convolution
 
                                #(4**k, n_filters, 4, k)                            
-        matches = torch.gather(torch.stack([self.kmer_params] * 4**self.k), 2, self.gather_idcs.unsqueeze(2)) # (4**k, n_filters, 1, k)
-        
+        matches = torch.gather(self.kmer_params.unsqueeze(0).expand(4**self.k, -1, -1, -1), 2, self.gather_idcs.unsqueeze(2)) # (4**k, n_filters, 1, k)
         matches = matches.squeeze() # (4**k, n_filters, k)
         matches = matches.float()
         matches = matches.sum(dim=-1) # sum over k dimension (equivalent to the sum in convolution)
-        matches = torch.where(matches == self.k, 1, 0).float() # for sanity check - this ensures equality to original "revisiting kmers" code
+        print(self.kmer_params)
         result = self.aggregate_fn(matches)*freq # pooling layer
         return result
 
@@ -250,7 +256,10 @@ class VIBModel(torch.nn.Module):
         self.activation1_common = torch.nn.Sigmoid()
         self.dropout1_common = torch.nn.Dropout(0.2)
         self.linear2_mean = torch.nn.Linear(512, self.__out_dim, dtype=torch.float)
-        self.linear2_std = torch.nn.Linear(512, self.__out_dim, dtype=torch.float)
+        #self.linear2_std = torch.nn.Linear(512, self.__out_dim, dtype=torch.float)
+        for name, param in self.named_parameters():
+            if "kmer_params" in name:
+                print(name, param.grad is None)
 
     def encoder(self, kmers: torch.Tensor):
         """
@@ -266,19 +275,19 @@ class VIBModel(torch.nn.Module):
         h = self.activation1_common(h)
         h = self.dropout1_common(h)
         mean = self.linear2_mean(h)
-        std = torch.nn.functional.softplus(self.linear2_std(h)) + 1e-6
+        #std = torch.nn.functional.softplus(self.linear2_std(h)) + 1e-6
         t2 = time.time()
         fc_layer.append(t2 - t1)
-        return mean, std
+        return mean
 
     def forward(self, left_kmers: torch.Tensor, right_kmers:torch.Tensor):
         """
         Forward pass
         """
-        left_mean, left_std = self.encoder(left_kmers)
-        right_mean, right_std = self.encoder(right_kmers)
+        left_mean = self.encoder(left_kmers)
+        right_mean = self.encoder(right_kmers)
 
-        return left_mean, left_std, right_mean, right_std
+        return left_mean, right_mean
 
     def get_k(self):
         """
@@ -313,9 +322,9 @@ class VIBModel(torch.nn.Module):
             if normalized:
                 kmers = kmers / kmers.sum(dim=1, keepdim=True)
 
-            means, stds = self.encoder(kmers)
+            means = self.encoder(kmers)
 
-        return means.detach().numpy(), stds.detach().numpy()
+        return means.detach().numpy()
 
     def save(self, path:str):
         """
@@ -406,11 +415,11 @@ def train_batch(model, criterion, optimizer, left_kmers: torch.Tensor, right_kme
     optimizer.zero_grad()
 
     # Make predictions for the current epoch
-    left_mean, left_std, right_mean, right_std = model(left_kmers, right_kmers)
+    left_mean, right_mean = model(left_kmers, right_kmers)
 
     # Compute the loss and backpropagate
     t0 = time.time()
-    batch_loss = criterion(left_mean, left_std, right_mean, right_std, labels)
+    batch_loss = criterion(left_mean, 0, right_mean, 0, labels)
     t1 = time.time()
     calculate_loss.append(t1 - t0)
     batch_loss.backward()

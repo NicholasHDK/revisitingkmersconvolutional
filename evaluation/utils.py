@@ -120,73 +120,13 @@ def get_embedding(
             from src.scalable import VIBModel
             print("in ", model_name)
             device = "cpu"
-            checkpoint = torch.load(test_model_dir)
-            config = checkpoint[0]
-            state_dict = checkpoint[1]
-            model = VIBModel(k=config['k'], out_dim=config['out_dim'], n_filters=136)
+            kwargs, state_dict = torch.load(test_model_dir)
+            model = VIBModel(**kwargs)
             model.load_state_dict(state_dict)
             print("Loaded model")
             model.eval()
-            def dense_encoding(read: str):
-                seq = np.array(read, dtype=np.bytes_).reshape(1, -1)
-                seq = seq.view(np.uint8).squeeze()
-                result = torch.zeros(seq.shape[-1], dtype=torch.uint8)
-                result[seq == 65] = 0
-                result[seq == 67] = 1
-                result[seq == 71] = 2
-                result[seq == 84] = 3
-                return result
-            
-            def batched_dense_to_onehot(reads):
-                """
-                Convert a batch of DNA sequences from dense encoding to one-hot encoding.
-                
-                Args:
-                    reads (Tensor): A tensor of shape (N, L) containing values in {0, 1, 2, 3, -1}.
-                
-                Returns:
-                    Tensor: A one-hot encoded tensor of shape (N, 4, L).
-                """
-                num_classes = 4
-                # Handle unknown (-1) by replacing it with 0 temporarily (it will be masked later)
-                masked_reads = torch.where(reads < 0, torch.tensor(0, dtype=reads.dtype, device=reads.device), reads).to(torch.int64)
 
-                # One-hot encoding using torch.nn.functional.one_hot, shape: (N, L, 4)
-                one_hot = torch.nn.functional.one_hot(masked_reads, num_classes=num_classes).to(torch.float32)
-
-                # Move the one-hot channel to the correct position: (N, 4, L)
-                one_hot = one_hot.permute(0, 2, 1)
-
-                # Set unknown values (-1 in input) to all zeros in the one-hot encoding
-                one_hot[(reads < 0).unsqueeze(1).expand_as(one_hot)] = 0
-                return one_hot
-
-            # convert dna sequences to one hot encoded tensors
-            print(len(dna_sequences))
-            dense_encodings = list(map(dense_encoding, dna_sequences))
-            max_len = max(list(map(len, dense_encodings)))
-            dense_encodings = [torch.nn.functional.pad(seq, (0, max_len - seq.shape[-1])) for seq in dense_encodings]
-            one_hot_encodings = torch.stack(dense_encodings)
-            dna_sequences = batched_dense_to_onehot(one_hot_encodings)
-            dna_sequences = dna_sequences.unsqueeze(1)
-            # pass one hot encodings to feature extractor, and then to encoder
-            # Nich: unrolled loop for faster processing
-
-            result = []
-            batch_size = 100
-            i = 0
-            while i < len(dna_sequences) // batch_size:
-                batch = dna_sequences[i*batch_size:i*batch_size + batch_size]
-                result.append(model.encoder(batch)[0])
-                i += 1
-            print(model.encoder(batch))
-            
-            if not ((len(dna_sequences) % batch_size) == 0):
-                batch = dna_sequences[i*batch_size:] 
-                result.append(model.encoder(batch)[0])
-
-            result = torch.vstack(result)
-            embeddings = np.array(result.detach().cpu())
+            embeddings = model.seq2emb(dna_sequences)
             return embeddings
         elif model_name == "conv_feature_extractor":
             raise NotImplementedError(f"{model_name} not implemented yet")
@@ -371,7 +311,7 @@ def KMedoid(features, min_similarity=0.8, min_bin_size=100, max_iter=300, metric
             p[selected_idx] = iter_count
             row_sum -= np.sum(similarities[:, selected_idx], axis=1)
             row_sum[selected_idx] = 0
-            print(f"Current label: {iter_count}, Number of assigned elements: {len(selected_idx)}")
+            #print(f"Current label: {iter_count}, Number of assigned elements: {len(selected_idx)}")
         else:
             raise ValueError("No selected index")
 

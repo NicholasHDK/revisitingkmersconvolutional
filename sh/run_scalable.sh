@@ -14,6 +14,7 @@ export MASTER_PORT=$(expr 10000 + $(echo -n $SLURM_JOBID | tail -c 4))
 export MASTER_ADDR=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)
 echo "port" ${MASTER_PORT} "==" ${MASTER_ADDR} "==" ${SLURM_JOB_NODELIST} "--" 
 
+export PYTHONUNBUFFERED=1
 #export NCCL_DEBUG=INFO # For printing the debug related to NCCL
 export NCCL_SOCKET_IFNAME=bond0
 #export NCCL_P2P_LEVEL=PHB
@@ -26,7 +27,7 @@ SCRIPT_PATH=${BASEFOLDER}/src/scalable.py
 
 # Model Parameters
 INPUT_PATH=$HOME/dnabert-s_data/train_100k.csv
-LOSS_NAME="vib_without_sampling"
+LOSS_NAME="bern"
 POSTFIX="_test10"
 K=4
 OUT_DIM=256
@@ -39,15 +40,12 @@ SAVE_EVERY=5 #50
 DISTRIBUTED=1 #0 #1
 DEVICE=gpu #gpu #None #gpu
 SEED=1
-TRAINED_MODEL_PATH="${BASEFOLDER}/models/scalable_100_k=8_d=256_negsampleperpos=200_maxseq=100000_epoch=50_LR=0.001_batch=8_device=None_loss=vib_without_sampling_seed=1_test9.model.epoch_3.checkpoint"
 START_EPOCH=0
 NUM_FILTERS=136
 WORKERS_NUM=8
 MAXSEQNUM=100000
 # Define the output path
-NAME=${NAME}_100_k=${K}_d=${OUT_DIM}_negsampleperpos=${NEGSAMPLEPERPOS}
-NAME=${NAME}_maxseq=${MAXSEQNUM}_epoch=${EPOCHNUM}_LR=${LR}_batch=${BATCH_SIZE}
-NAME=${NAME}_device=${DEVICE}_loss=${LOSS_NAME}_seed=${SEED}${POSTFIX}
+NAME=${NAME}k=$K
 
 OUTPUT_PATH=${BASEFOLDER}/models/${NAME}.model
 LOG_DIR=${BASEFOLDER}/logs/${NAME}

@@ -45,7 +45,7 @@ MODELNAME="conv_nonlinear"
 # Define the model name
 
 
-MODELNAME=${BASEFOLDER}/model_checkpoint20.pt
+MODELNAME=${BASEFOLDER}/models/scalablek=4.model.epoch_95.checkpoint
 
 # Define the evaluation parameters
 SPECIES_LIST=("reference") #("reference" "plant" "marine")
