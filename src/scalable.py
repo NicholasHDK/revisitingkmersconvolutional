@@ -204,7 +204,7 @@ class ConvFeatureExtractor(nn.Module):
             torch.nn.functional.one_hot(torch.tensor(indices), num_classes = 4) 
             for indices in list(product([0,1,2,3], repeat=k))
             ]).permute(0,2,1) 
-        self.kmer_params = torch.nn.Parameter(one_hot_kmers.float()) # (n_filters, 4, k)
+        self.kmer_params = one_hot_kmers.float().to(device) # (n_filters, 4, k)
         for name, param in self.named_parameters():
             if "kmer_params" in name:
                 print(name, param.grad is None)
@@ -222,7 +222,7 @@ class ConvFeatureExtractor(nn.Module):
         matches = matches.squeeze() # (4**k, n_filters, k)
         matches = matches.float()
         matches = matches.sum(dim=-1) # sum over k dimension (equivalent to the sum in convolution)
-        print(self.kmer_params)
+        matches = torch.where(matches == self.k, 1, 0).float() # for sanity check - this ensures equality to original "revisiting kmers" code
         result = self.aggregate_fn(matches)*freq # pooling layer
         return result
 

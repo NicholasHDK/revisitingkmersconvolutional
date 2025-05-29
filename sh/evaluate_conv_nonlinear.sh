@@ -4,11 +4,10 @@
 #SBATCH --error=%x_%j.err
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=100G
-#SBATCH --partition=batch
 #SBATCH --time=0-12:00:00
 
 # Define the global variables
-BASEFOLDER=${HOME}/revisitingkmers
+BASEFOLDER=${HOME}/revisitingkmersconvolutional
 PYTHON="singularity exec --nv ${BASEFOLDER}/../project_base.sif python3"
 SCRIPT_PATH=${BASEFOLDER}/evaluation/binning.py
 RESULTS_FOLDER=${BASEFOLDER}/results
@@ -44,12 +43,12 @@ MODELNAME="conv_nonlinear"
 # Define the model name
 
 
-MODELNAME=scalable_100_k=8_d=256_negsampleperpos=200_maxseq=100000_epoch=50_LR=0.001_batch=1000_device=None_loss=vib_without_sampling_seed=1_test10.model.epoch_1.checkpoint
+MODELNAME=scalablek=4.model.epoch_20.checkpoint
 
 # Define the evaluation parameters
-SPECIES_LIST=("reference") #("reference" "plant" "marine")
+SPECIES_LIST=("reference" "plant" "marine")
 MODELLIST=conv_nonlinear
-DATA_DIR=${BASEFOLDER}/../dataset/
+DATA_DIR=${BASEFOLDER}/../dnabert-s_data/
 MODEL_PATH=${BASEFOLDER}/models/${MODELNAME}
 
 for SPECIES in ${SPECIES_LIST[@]}
@@ -60,7 +59,7 @@ OUTPUT_PATH="${BASEFOLDER}/results/${SPECIES}/${MODELNAME}.txt"
 # Define the command
 CMD="${PYTHON} ${SCRIPT_PATH} --data_dir ${DATA_DIR} --model_list ${MODELLIST}"
 CMD=$CMD" --species ${SPECIES} --test_model_dir ${MODEL_PATH}"
-CMD=$CMD" --output ${OUTPUT_PATH}"
+CMD=$CMD" --output ${OUTPUT_PATH} --metric l2"
 
 $CMD
 done
