@@ -222,7 +222,7 @@ class ConvFeatureExtractor(nn.Module):
         matches = matches.squeeze() # (4**k, n_filters, k)
         matches = matches.float()
         matches = matches.sum(dim=-1) # sum over k dimension (equivalent to the sum in convolution)
-        matches = torch.where(matches == self.k, 1, 0).float() # for sanity check - this ensures equality to original "revisiting kmers" code
+        #matches = torch.where(matches == self.k, 1, 0).float() # for sanity check - this ensures equality to original "revisiting kmers" code
         result = self.aggregate_fn(matches)*freq # pooling layer
         return result
 
