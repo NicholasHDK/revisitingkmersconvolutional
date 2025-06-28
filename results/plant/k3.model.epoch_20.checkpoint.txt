@@ -1,0 +1,60 @@
+
+13/06/2025 07:19:46model: conv_nonlinear-/ceph/home/student.aau.dk/nherrm19/revisitingkmersconvolutional/models/equivalent/k3.model.epoch_20.checkpoint, species: plant, sample: 5, binning
+recall_results: [129, 110, 97, 91, 77, 65, 54, 43, 33]
+f1_results: [134, 110, 95, 82, 78, 67, 50, 40, 32]
+threshold: 0.9
+
+
+13/06/2025 07:32:12model: conv_nonlinear-/ceph/home/student.aau.dk/nherrm19/revisitingkmersconvolutional/models/equivalent/k3.model.epoch_20.checkpoint, species: plant, sample: 6, binning
+recall_results: [126, 104, 96, 79, 67, 53, 48, 36, 27]
+f1_results: [120, 97, 85, 73, 65, 56, 44, 34, 24]
+threshold: 0.9
+
+
+13/06/2025 07:36:26model: conv_nonlinear-/ceph/home/student.aau.dk/nherrm19/revisitingkmersconvolutional/models/F256/k3.model.epoch_20.checkpoint, species: plant, sample: 5, binning
+recall_results: [129, 109, 99, 92, 76, 64, 55, 41, 32]
+f1_results: [132, 105, 89, 82, 72, 63, 47, 38, 26]
+threshold: 0.9
+
+
+13/06/2025 07:39:24model: conv_nonlinear-/ceph/home/student.aau.dk/nherrm19/revisitingkmersconvolutional/models/F512/k3.model.epoch_20.checkpoint, species: plant, sample: 5, binning
+recall_results: [129, 108, 95, 88, 75, 62, 50, 39, 34]
+f1_results: [137, 111, 98, 87, 78, 64, 52, 38, 27]
+threshold: 0.9
+
+
+13/06/2025 07:49:05model: conv_nonlinear-/ceph/home/student.aau.dk/nherrm19/revisitingkmersconvolutional/models/F256/k3.model.epoch_20.checkpoint, species: plant, sample: 6, binning
+recall_results: [125, 100, 93, 82, 69, 57, 44, 31, 28]
+f1_results: [126, 97, 79, 70, 64, 55, 42, 28, 23]
+threshold: 0.9
+
+
+13/06/2025 07:52:05model: conv_nonlinear-/ceph/home/student.aau.dk/nherrm19/revisitingkmersconvolutional/models/F512/k3.model.epoch_20.checkpoint, species: plant, sample: 6, binning
+recall_results: [126, 109, 94, 80, 69, 53, 44, 35, 27]
+f1_results: [121, 99, 81, 70, 62, 54, 41, 31, 22]
+threshold: 0.9
+
+
+13/06/2025 09:12:56model: conv_nonlinear-/ceph/home/student.aau.dk/nherrm19/revisitingkmersconvolutional/models/F1024/k3.model.epoch_20.checkpoint, species: plant, sample: 5, binning
+recall_results: [133, 107, 95, 85, 71, 60, 50, 38, 33]
+f1_results: [134, 104, 92, 78, 69, 57, 48, 36, 27]
+threshold: 0.9
+
+
+13/06/2025 09:25:52model: conv_nonlinear-/ceph/home/student.aau.dk/nherrm19/revisitingkmersconvolutional/models/F1024/k3.model.epoch_20.checkpoint, species: plant, sample: 6, binning
+recall_results: [125, 101, 95, 75, 65, 54, 45, 35, 28]
+f1_results: [121, 96, 84, 71, 59, 52, 41, 31, 23]
+threshold: 0.9
+
+
+13/06/2025 09:26:07model: conv_nonlinear-/ceph/home/student.aau.dk/nherrm19/revisitingkmersconvolutional/models/F2048/k3.model.epoch_20.checkpoint, species: plant, sample: 5, binning
+recall_results: [135, 111, 100, 89, 69, 60, 49, 40, 29]
+f1_results: [130, 109, 94, 81, 68, 60, 44, 36, 27]
+threshold: 0.9
+
+
+13/06/2025 09:38:44model: conv_nonlinear-/ceph/home/student.aau.dk/nherrm19/revisitingkmersconvolutional/models/F2048/k3.model.epoch_20.checkpoint, species: plant, sample: 6, binning
+recall_results: [129, 104, 90, 81, 67, 53, 41, 36, 30]
+f1_results: [121, 97, 81, 72, 62, 54, 42, 29, 24]
+threshold: 0.9
+

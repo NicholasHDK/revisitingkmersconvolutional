@@ -1,0 +1,6 @@
+
+13/06/2025 00:50:50model: conv_nonlinear-/ceph/home/student.aau.dk/nherrm19/revisitingkmersconvolutional/models/equivalent/k4.model.epoch_90.checkpoint, species: marine, sample: 5, binning
+recall_results: [325, 272, 247, 231, 210, 185, 157, 118, 100]
+f1_results: [341, 281, 247, 226, 206, 193, 164, 135, 92]
+threshold: 0.9
+

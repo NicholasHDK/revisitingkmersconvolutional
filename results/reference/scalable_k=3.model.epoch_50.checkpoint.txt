@@ -1,0 +1,60 @@
+
+10/06/2025 18:52:21model: conv_nonlinear-/ceph/home/student.aau.dk/nherrm19/revisitingkmersconvolutional/models/filters_64/scalable_k=3.model.epoch_50.checkpoint, species: reference, sample: 5, binning
+recall_results: [238, 226, 216, 212, 206, 194, 175, 144, 109]
+f1_results: [240, 229, 218, 213, 203, 194, 183, 161, 119]
+threshold: 0.9
+
+
+10/06/2025 18:55:07model: conv_nonlinear-/ceph/home/student.aau.dk/nherrm19/revisitingkmersconvolutional/models/filters_128/scalable_k=3.model.epoch_50.checkpoint, species: reference, sample: 5, binning
+recall_results: [238, 226, 216, 212, 206, 194, 175, 145, 110]
+f1_results: [240, 229, 218, 213, 204, 194, 183, 161, 119]
+threshold: 0.9
+
+
+10/06/2025 18:55:36model: conv_nonlinear-/ceph/home/student.aau.dk/nherrm19/revisitingkmersconvolutional/models/filters_64/scalable_k=3.model.epoch_50.checkpoint, species: reference, sample: 6, binning
+recall_results: [210, 203, 202, 196, 193, 186, 166, 142, 113]
+f1_results: [212, 206, 202, 201, 194, 189, 180, 160, 120]
+threshold: 0.9
+
+
+10/06/2025 18:58:17model: conv_nonlinear-/ceph/home/student.aau.dk/nherrm19/revisitingkmersconvolutional/models/filters_128/scalable_k=3.model.epoch_50.checkpoint, species: reference, sample: 6, binning
+recall_results: [210, 203, 202, 196, 193, 186, 166, 142, 113]
+f1_results: [212, 206, 202, 201, 194, 189, 180, 160, 120]
+threshold: 0.9
+
+
+10/06/2025 19:50:34model: conv_nonlinear-/ceph/home/student.aau.dk/nherrm19/revisitingkmersconvolutional/models/filters_256/scalable_k=3.model.epoch_50.checkpoint, species: reference, sample: 5, binning
+recall_results: [238, 226, 216, 212, 206, 194, 175, 145, 110]
+f1_results: [240, 229, 218, 213, 204, 194, 183, 161, 119]
+threshold: 0.9
+
+
+10/06/2025 19:53:35model: conv_nonlinear-/ceph/home/student.aau.dk/nherrm19/revisitingkmersconvolutional/models/filters_256/scalable_k=3.model.epoch_50.checkpoint, species: reference, sample: 6, binning
+recall_results: [210, 203, 202, 196, 193, 186, 166, 142, 113]
+f1_results: [212, 206, 202, 201, 194, 189, 180, 160, 120]
+threshold: 0.9
+
+
+10/06/2025 21:00:32model: conv_nonlinear-/ceph/home/student.aau.dk/nherrm19/revisitingkmersconvolutional/models/filters_512/scalable_k=3.model.epoch_50.checkpoint, species: reference, sample: 5, binning
+recall_results: [238, 226, 216, 212, 206, 194, 175, 144, 109]
+f1_results: [240, 229, 218, 213, 203, 194, 183, 161, 119]
+threshold: 0.9
+
+
+10/06/2025 21:03:51model: conv_nonlinear-/ceph/home/student.aau.dk/nherrm19/revisitingkmersconvolutional/models/filters_512/scalable_k=3.model.epoch_50.checkpoint, species: reference, sample: 6, binning
+recall_results: [210, 203, 202, 196, 193, 186, 166, 142, 113]
+f1_results: [212, 206, 202, 201, 194, 189, 180, 160, 120]
+threshold: 0.9
+
+
+11/06/2025 13:06:58model: conv_nonlinear-/ceph/home/student.aau.dk/nherrm19/revisitingkmersconvolutional/models/filters_1024/scalable_k=3.model.epoch_50.checkpoint, species: reference, sample: 5, binning
+recall_results: [239, 229, 224, 219, 209, 200, 172, 149, 119]
+f1_results: [242, 232, 222, 216, 213, 200, 186, 160, 124]
+threshold: 0.9
+
+
+11/06/2025 13:09:39model: conv_nonlinear-/ceph/home/student.aau.dk/nherrm19/revisitingkmersconvolutional/models/filters_1024/scalable_k=3.model.epoch_50.checkpoint, species: reference, sample: 6, binning
+recall_results: [207, 202, 200, 196, 188, 175, 158, 129, 107]
+f1_results: [208, 204, 201, 199, 195, 188, 176, 156, 113]
+threshold: 0.9
+

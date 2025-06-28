@@ -142,7 +142,7 @@ def main(args):
                 with open(args.output, 'a+') as f:
                     f.write("\n")
                     f.write(datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
-                    f.write(f"model: {model_name}, species: {species}, sample: {sample}, binning\n")
+                    f.write(f"model: {model_name}-{args.test_model_dir}, species: {species}, sample: {sample}, binning\n")
                     f.write(f"recall_results: {recall_results}\n")
                     f.write(f"f1_results: {f1_results}\n")
                     f.write(f"threshold: {threshold}\n\n")

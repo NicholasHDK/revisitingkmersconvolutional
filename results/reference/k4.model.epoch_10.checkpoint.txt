@@ -1,0 +1,12 @@
+
+12/06/2025 23:43:19model: conv_nonlinear-/ceph/home/student.aau.dk/nherrm19/revisitingkmersconvolutional/models/equivalent/k4.model.epoch_10.checkpoint, species: reference, sample: 5, binning
+recall_results: [226, 215, 209, 201, 195, 188, 170, 139, 111]
+f1_results: [228, 217, 209, 206, 200, 189, 178, 157, 115]
+threshold: 0.9
+
+
+12/06/2025 23:46:53model: conv_nonlinear-/ceph/home/student.aau.dk/nherrm19/revisitingkmersconvolutional/models/equivalent/k4.model.epoch_10.checkpoint, species: reference, sample: 6, binning
+recall_results: [206, 201, 197, 194, 188, 182, 162, 138, 106]
+f1_results: [207, 204, 200, 197, 192, 186, 176, 156, 119]
+threshold: 0.9
+

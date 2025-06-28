@@ -26,6 +26,7 @@ from torch.nn import functional as F
 from torch import nn
 from torch.profiler import profile, record_function, ProfilerActivity
 from typing import Callable
+from functools import partial
 
 getitem = []
 _collate_fn = []
@@ -120,7 +121,7 @@ class PairDataset(Dataset):
         # with open(file_path, 'r') as f:
         #     reader = list(csv.reader(f, delimiter=','))
         lines = pd.read_csv(file_path, sep=',', header=None).iloc[chosen_lines].values.tolist()
-        for line in lines[:max_seq_num]:
+        for line in lines:
             left_seq, right_seq = line[0], line[1]
             left_kmer_profiles.append(self.__kc.seq2kmer(left_seq))
             right_kmer_profiles.append(self.__kc.seq2kmer(right_seq))
@@ -182,58 +183,66 @@ class PairDataset(Dataset):
 
 # Nich: define convolutional input layer as module
 class ConvFeatureExtractor(nn.Module):
-    def __init__(self, k: int, 
+    def __init__(self, 
+        k: int,
+        n_filters: int, 
         device, 
-        aggregate_fn: Callable[[Tensor], Tensor] = torch.sum
+        aggregate_fn: Callable[[Tensor], Tensor] = partial(torch.sum, dim=1)
         ):
         super().__init__()
         self.k = k
         self.aggregate_fn = aggregate_fn
-
+        self.n_filters = n_filters
         # create equivalent kmers as one-hots
         from itertools import product
-        one_hot_kmer_idcs = torch.tensor(list(product([0,1,2,3], repeat=k))).long() # (4**k, k)
-
-        # create indices to gather from - I use torch.roll to ensure that each filter interacts with each possible k-mer
-        self.gather_idcs = torch.stack([
-            torch.roll(one_hot_kmer_idcs, i, 0) 
-            for i in range(len(one_hot_kmer_idcs))
-            ]).to(device) #(4**k, 4**k, k)
-
+        self.one_hot_kmer_idcs = torch.tensor(list(product([0,1,2,3], repeat=k))).long() # (4**k, k)
+        # create indices to gather from. 
+        self.gather_idcs = self.one_hot_kmer_idcs.unsqueeze(0).expand(self.n_filters, -1, -1).unsqueeze(2).to(device) # (filters, 4**k, 1, k)
+        # create one_hot equivalents of kmers
         one_hot_kmers = torch.stack([
             torch.nn.functional.one_hot(torch.tensor(indices), num_classes = 4) 
             for indices in list(product([0,1,2,3], repeat=k))
-            ]).permute(0,2,1) 
-        self.kmer_params = one_hot_kmers.float().to(device) # (n_filters, 4, k)
-        for name, param in self.named_parameters():
-            if "kmer_params" in name:
-                print(name, param.grad is None)
+            ]).permute(0,2,1) # (4**k, 4, k)
+
+        if 4**k < n_filters:
+            randomized_filters = torch.randn([n_filters - 4**k, 4, k])
+            filters = torch.vstack([one_hot_kmers, randomized_filters])
+            self.kmer_params = torch.nn.Parameter(filters + torch.randn_like(filters.float()))
+        else:
+            self.kmer_params = torch.nn.Parameter(one_hot_kmers[n_filters] + torch.randn_like(one_hot_kmers.float())[n_filters]) # (n_filters, 4, k)
         
+        #self.kmer_params = torch.nn.Parameter(one_hot_kmers.float(), requires_grad=False) # TODO DELETE
+        self.temperature = torch.nn.Parameter(torch.tensor([1.0]), requires_grad=True) # TODO CHANGE INITIAL VALUE AND REQUIRES GRAD
+
     def convolve(self, freq: Tensor):
         """
         Faster convolve, taking advantage of the fact that sequences are one-hot vectors.
         Args:
             freq: kmer frequencies with shape (B, 4**k)
         """
+        kmer_params_view = self.kmer_params.unsqueeze(1).expand(-1, 4**self.k, -1, -1) # (n_filters, 4**k, 4, k)
         # torch.gather gets values from self.kmer_params where self.one_hot_kmers is 1, i.e. it is equal to convolution
-
-                               #(4**k, n_filters, 4, k)                            
-        matches = torch.gather(self.kmer_params.unsqueeze(0).expand(4**self.k, -1, -1, -1), 2, self.gather_idcs.unsqueeze(2)) # (4**k, n_filters, 1, k)
-        matches = matches.squeeze() # (4**k, n_filters, k)
-        matches = matches.float()
+        matches = torch.gather( 
+            kmer_params_view, # (n_filters, 4**k, 4, k)
+            2, 
+            self.gather_idcs # (n_filters, 4**k, 1, k)
+            ) # gather along the onehot dimension, leaving a tensor of shape (filters, 4**k, 1, k)
+        matches = matches.squeeze() # (filters, 4**k, k)
         matches = matches.sum(dim=-1) # sum over k dimension (equivalent to the sum in convolution)
-        #matches = torch.where(matches == self.k, 1, 0).float() # for sanity check - this ensures equality to original "revisiting kmers" code
-        result = self.aggregate_fn(matches)*freq # pooling layer
-        return result
+        
+        matches = torch.softmax(matches/self.temperature, dim=1)
+        # this line serves both as a pooling layer (with sum) and to rescale filter outputs by frequencies
+        pooled_feature_maps = freq @ matches.T # (batch_size, filters) 
+        profile = pooled_feature_maps / pooled_feature_maps.sum(1).unsqueeze(1)
+        return profile
 
-      
-    def forward(self, frequencies: Tensor):
+    def forward(self, freq: Tensor):
         """frequencies is a tensor of shape (B, 4**k)"""
-        y = self.convolve(frequencies)
+        y = self.convolve(freq)
         return y
 
 class VIBModel(torch.nn.Module):
-    def __init__(self, k:int, out_dim:int=256, seed:int=0, device='cpu'):
+    def __init__(self, k:int, n_filters: int, out_dim:int=256, seed:int=0, device='cpu'):
         """
         Initialize the VIB model
         """
@@ -244,22 +253,20 @@ class VIBModel(torch.nn.Module):
         self.__out_dim = out_dim
         # Define the k-mer converter object
         self.__kc = KmerConverter(self.__k)
+        self.n_filters = n_filters
         # Set the seed
         set_seed(seed)
 
         # Nich: define convolutional input layer
-        self.conv_feature_extractor = ConvFeatureExtractor(k, device)
+        self.conv_feature_extractor = ConvFeatureExtractor(k, n_filters, device)
         
         # Define the layers
-        self.linear1_common = torch.nn.Linear(4**k, 512, dtype=torch.float)
+        self.linear1_common = torch.nn.Linear(n_filters, 512, dtype=torch.float)
         self.batch1_common = torch.nn.BatchNorm1d(512, dtype=torch.float)
         self.activation1_common = torch.nn.Sigmoid()
         self.dropout1_common = torch.nn.Dropout(0.2)
         self.linear2_mean = torch.nn.Linear(512, self.__out_dim, dtype=torch.float)
         #self.linear2_std = torch.nn.Linear(512, self.__out_dim, dtype=torch.float)
-        for name, param in self.named_parameters():
-            if "kmer_params" in name:
-                print(name, param.grad is None)
 
     def encoder(self, kmers: torch.Tensor):
         """
@@ -331,7 +338,7 @@ class VIBModel(torch.nn.Module):
         Save the model
         """
         torch.save(
-            [{'k': self.get_k(), 'out_dim': self.get_out_dim()}, self.state_dict()], path
+            [{'k': self.get_k(), 'out_dim': self.get_out_dim(), 'n_filters': self.n_filters}, self.state_dict()], path
         )
 
 
@@ -423,6 +430,11 @@ def train_batch(model, criterion, optimizer, left_kmers: torch.Tensor, right_kme
     t1 = time.time()
     calculate_loss.append(t1 - t0)
     batch_loss.backward()
+    param = model.module.conv_feature_extractor.kmer_params
+    #print("Grad None?", param.grad is None)
+    #if param.grad is not None:
+    #print("Mean grad:", (param - model.module.conv_feature_extractor.kmer_params_copy).abs().mean().item())
+    #print("First dense layer:", model.module.linear1_common.weight.grad.abs().mean().item())
     # Update the model parameters
     optimizer.step()
     t2 = time.time()
@@ -507,6 +519,7 @@ def train(device, distributed, model, criterion, optimizer, data_loader, epoch_n
         print("calc_loss", torch.std_mean(torch.tensor(calculate_loss)))
         print("backprop", torch.std_mean(torch.tensor(backprop)))
         print("full_batch_process", torch.std_mean(torch.tensor(_full_batch_process)))
+    print(model.module.conv_feature_extractor.kmer_params[0])
     if distributed:
         if device == 0:
             model.module.save(output_path)
@@ -589,17 +602,7 @@ def main_worker(
     )
 
     ### Define the model
-    # Nich: load model if args.trained_model_path
-    if args.trained_model_path is not None:
-        checkpoint = torch.load(args.trained_model_path)
-        config = checkpoint[0]
-        state_dict = checkpoint[1]
-        model = VIBModel(k=config['k'], out_dim=config['out_dim'], n_filters=args.num_filters)
-        model.load_state_dict(state_dict)
-        print("Loaded model")
-    # Nich: initialize filter weights to equivalent kmers
-    else:
-        model = VIBModel(k=k, out_dim=args.out_dim, seed=args.seed, device=device)
+    model = VIBModel(k=k, n_filters=args.num_filters, out_dim=args.out_dim, seed=args.seed, device=device)
     
     if distributed:
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
@@ -651,7 +654,7 @@ if __name__ == "__main__":
 
     # Define the world size, i.e. total number of processes participating in the distributed training job
     world_size = None
-    
+
     # Nich: move all cuda code into main_worker to avoid bugs
     if args.distributed:
         assert torch.cuda.is_available(), "Distributed training requires CUDA"
@@ -674,8 +677,8 @@ if __name__ == "__main__":
         print(f"\t- Device: {device}")
     print(f"\t- Loss function: {args.loss_name}")
     print(f"\t- Batch size: {args.batch_size}")
-
-    
+    print(f"\t- k: {args.k}")
+    print(f"\t- num_filters: {args.num_filters}")
 
     # Nich: pass 'args' along with arguments
     arguments = (

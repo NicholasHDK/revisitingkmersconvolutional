@@ -1,10 +1,11 @@
 #!/usr/bin/bash -l
-#SBATCH --job-name=EVALUATION
-#SBATCH --output=%x_%j.out
+#SBATCH --job-name=EVAL_F2048_EPOCH
+#SBATCH --output=%x_%A_%a.out
 #SBATCH --error=%x_%j.err
 #SBATCH --cpus-per-task=1
-#SBATCH --mem=100G
+#SBATCH --mem=256G
 #SBATCH --time=0-12:00:00
+#SBATCH --array=1-9
 
 # Define the global variables
 BASEFOLDER=${HOME}/revisitingkmersconvolutional
@@ -31,25 +32,25 @@ fi
 
 # Model Parameters
 POSTFIX=""
-K=4
+K=6
 DIM=256
 EPOCHNUM=300
 LR=0.001
 NEGSAMPLEPERPOS=200
 BATCH_SIZE=8
 MAXREADNUM=100000
-MODELNAME="conv_nonlinear"
-
+MODELNAME="scalable"
+EPOCH=$((${SLURM_ARRAY_TASK_ID}*10))
 # Define the model name
 
 
-MODELNAME=scalablek=5_n_filters=1024_all_params.model.epoch_30.checkpoint
+MODELNAME=k${K}.model.epoch_${EPOCH}.checkpoint
 
-# Define the evaluation parameters
+# Define th parameters
 SPECIES_LIST=("reference" "plant" "marine")
 MODELLIST=conv_nonlinear
-DATA_DIR=${BASEFOLDER}/../dnabert-s_data/
-MODEL_PATH=${BASEFOLDER}/models/${MODELNAME}
+DATA_DIR=${BASEFOLDER}/../dnabert-s_data
+MODEL_PATH=${BASEFOLDER}/models/F2048/${MODELNAME}
 
 for SPECIES in ${SPECIES_LIST[@]}
 do
@@ -61,7 +62,6 @@ CMD="${PYTHON} ${SCRIPT_PATH} --data_dir ${DATA_DIR} --model_list ${MODELLIST}"
 CMD=$CMD" --species ${SPECIES} --test_model_dir ${MODEL_PATH}"
 CMD=$CMD" --output ${OUTPUT_PATH} --metric l2"
 
-echo k${K}
 $CMD
 done
 

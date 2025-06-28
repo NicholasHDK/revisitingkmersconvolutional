@@ -1,0 +1,36 @@
+
+10/06/2025 23:47:41model: conv_nonlinear-/ceph/home/student.aau.dk/nherrm19/revisitingkmersconvolutional/models/filters_64/scalable_k=6.model.epoch_20.checkpoint, species: reference, sample: 5, binning
+recall_results: [244, 235, 229, 220, 205, 187, 176, 150, 115]
+f1_results: [246, 232, 228, 216, 203, 189, 175, 158, 119]
+threshold: 0.9
+
+
+10/06/2025 23:50:37model: conv_nonlinear-/ceph/home/student.aau.dk/nherrm19/revisitingkmersconvolutional/models/filters_64/scalable_k=6.model.epoch_20.checkpoint, species: reference, sample: 6, binning
+recall_results: [214, 205, 201, 199, 195, 187, 165, 135, 104]
+f1_results: [215, 208, 206, 199, 196, 192, 178, 160, 116]
+threshold: 0.9
+
+
+10/06/2025 23:56:54model: conv_nonlinear-/ceph/home/student.aau.dk/nherrm19/revisitingkmersconvolutional/models/filters_256/scalable_k=6.model.epoch_20.checkpoint, species: reference, sample: 5, binning
+recall_results: [231, 222, 215, 205, 201, 190, 173, 149, 107]
+f1_results: [232, 225, 218, 211, 207, 196, 183, 164, 121]
+threshold: 0.9
+
+
+11/06/2025 00:00:05model: conv_nonlinear-/ceph/home/student.aau.dk/nherrm19/revisitingkmersconvolutional/models/filters_256/scalable_k=6.model.epoch_20.checkpoint, species: reference, sample: 6, binning
+recall_results: [208, 203, 201, 193, 189, 179, 162, 141, 110]
+f1_results: [211, 206, 203, 201, 194, 185, 175, 155, 124]
+threshold: 0.9
+
+
+11/06/2025 01:43:22model: conv_nonlinear-/ceph/home/student.aau.dk/nherrm19/revisitingkmersconvolutional/models/filters_1024/scalable_k=6.model.epoch_20.checkpoint, species: reference, sample: 5, binning
+recall_results: [231, 223, 220, 210, 202, 186, 161, 139, 111]
+f1_results: [236, 223, 216, 210, 200, 190, 177, 153, 117]
+threshold: 0.9
+
+
+11/06/2025 01:46:35model: conv_nonlinear-/ceph/home/student.aau.dk/nherrm19/revisitingkmersconvolutional/models/filters_1024/scalable_k=6.model.epoch_20.checkpoint, species: reference, sample: 6, binning
+recall_results: [211, 205, 204, 198, 195, 188, 170, 153, 124]
+f1_results: [214, 207, 204, 203, 198, 190, 182, 167, 139]
+threshold: 0.9
+

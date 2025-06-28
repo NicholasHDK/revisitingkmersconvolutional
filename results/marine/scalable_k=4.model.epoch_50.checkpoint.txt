@@ -1,0 +1,36 @@
+
+10/06/2025 19:59:23model: conv_nonlinear-/ceph/home/student.aau.dk/nherrm19/revisitingkmersconvolutional/models/filters_64/scalable_k=4.model.epoch_50.checkpoint, species: marine, sample: 5, binning
+recall_results: [331, 280, 259, 245, 226, 195, 165, 124, 103]
+f1_results: [351, 291, 255, 240, 218, 201, 177, 145, 100]
+threshold: 0.9
+
+
+10/06/2025 20:02:54model: conv_nonlinear-/ceph/home/student.aau.dk/nherrm19/revisitingkmersconvolutional/models/filters_128/scalable_k=4.model.epoch_50.checkpoint, species: marine, sample: 5, binning
+recall_results: [331, 279, 258, 245, 226, 195, 165, 124, 103]
+f1_results: [351, 291, 255, 240, 218, 201, 177, 145, 100]
+threshold: 0.9
+
+
+10/06/2025 20:42:24model: conv_nonlinear-/ceph/home/student.aau.dk/nherrm19/revisitingkmersconvolutional/models/filters_64/scalable_k=4.model.epoch_50.checkpoint, species: marine, sample: 6, binning
+recall_results: [346, 300, 280, 266, 249, 224, 187, 150, 126]
+f1_results: [382, 300, 273, 251, 238, 219, 194, 165, 116]
+threshold: 0.9
+
+
+10/06/2025 20:43:56model: conv_nonlinear-/ceph/home/student.aau.dk/nherrm19/revisitingkmersconvolutional/models/filters_128/scalable_k=4.model.epoch_50.checkpoint, species: marine, sample: 6, binning
+recall_results: [347, 300, 280, 266, 249, 224, 187, 150, 126]
+f1_results: [381, 300, 273, 251, 238, 219, 194, 165, 116]
+threshold: 0.9
+
+
+10/06/2025 20:51:17model: conv_nonlinear-/ceph/home/student.aau.dk/nherrm19/revisitingkmersconvolutional/models/filters_256/scalable_k=4.model.epoch_50.checkpoint, species: marine, sample: 5, binning
+recall_results: [331, 279, 258, 245, 226, 196, 166, 125, 104]
+f1_results: [352, 291, 255, 240, 218, 201, 177, 145, 100]
+threshold: 0.9
+
+
+10/06/2025 21:23:24model: conv_nonlinear-/ceph/home/student.aau.dk/nherrm19/revisitingkmersconvolutional/models/filters_256/scalable_k=4.model.epoch_50.checkpoint, species: marine, sample: 6, binning
+recall_results: [346, 300, 280, 266, 249, 224, 187, 150, 126]
+f1_results: [382, 300, 273, 251, 238, 219, 194, 165, 116]
+threshold: 0.9
+

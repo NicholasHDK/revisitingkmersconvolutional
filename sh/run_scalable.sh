@@ -1,10 +1,10 @@
 #!/bin/bash
-#SBATCH --job-name=scalable_non_distributed
-#SBATCH --output=%x_%j.out
+#SBATCH --job-name=F1024
+#SBATCH --output=%x_k%a.out
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=200G
 #SBATCH --time=0-12:00:00
-
+#SBATCH --array=7
 
 nvidia-smi
 set -eu
@@ -29,32 +29,32 @@ SCRIPT_PATH=${BASEFOLDER}/src/scalable.py
 INPUT_PATH=$HOME/dnabert-s_data/train_100k.csv
 LOSS_NAME="bern"
 POSTFIX="_test10"
-K=4
+K=$SLURM_ARRAY_TASK_ID
 OUT_DIM=256
 NEGSAMPLEPERPOS=200
-MAXSEQNUM=100
+MAXSEQNUM=100000
 EPOCHNUM=100 #100 #300
 LR=0.001
-BATCH_SIZE=10000 #100000 #1000 #10000
+BATCH_SIZE=1000 #100000 #1000 #10000
 SAVE_EVERY=5 #50
 DISTRIBUTED=1 #0 #1
 DEVICE=gpu #gpu #None #gpu
 SEED=1
 START_EPOCH=0
-NUM_FILTERS=136
+NUM_FILTERS=1024
 WORKERS_NUM=8
 MAXSEQNUM=100000
 # Define the output path
-NAME=${NAME}k=$K
+NAME=${NAME}_k=${K}
 
-OUTPUT_PATH=${BASEFOLDER}/models/${NAME}.model
+OUTPUT_PATH=${BASEFOLDER}/models/F${NUM_FILTERS}/k${K}.model
 LOG_DIR=${BASEFOLDER}/logs/${NAME}
 
 # Define the command
 CMD="$PYTHON ${SCRIPT_PATH} --input $INPUT_PATH --output_path ${OUTPUT_PATH} --k ${K} --out_dim ${OUT_DIM}"
 CMD="${CMD} --neg_sample_per_pos ${NEGSAMPLEPERPOS} --max_seq_num ${MAXSEQNUM}"
 CMD="${CMD} --epoch $EPOCHNUM --lr $LR --batch_size ${BATCH_SIZE} --save_every ${SAVE_EVERY} --distributed ${DISTRIBUTED}"
-CMD="${CMD} --device ${DEVICE} --loss_name ${LOSS_NAME} --seed ${SEED} --workers ${WORKERS_NUM}"
+CMD="${CMD} --num_filters ${NUM_FILTERS} --device ${DEVICE} --loss_name ${LOSS_NAME} --seed ${SEED} --workers ${WORKERS_NUM}"
 # Run the command
 $CMD
 

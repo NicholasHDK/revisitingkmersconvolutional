@@ -37,108 +37,110 @@ def get_embedding(
     embedding_file_path = os.path.join(embedding_file_dir, f"{model_name}.npy")
 
     # Load the embedding file if it exits
-    if os.path.exists(embedding_file_path):
-        print(f"Load embedding from file {embedding_file_path}")
-        embedding = np.load(embedding_file_path)
+    #if os.path.exists(embedding_file_path):
+    #    print(f"Load embedding from file {embedding_file_path}")
+    #    embedding = np.load(embedding_file_path)
+
+    print(f"Calculate embedding for {model_name} {species} {sample}")
+
+    if model_name == "tnf":
+
+        embedding = calculate_tnf(dna_sequences)
+        embedding = normalize(embedding, norm='l2')
+
+    elif model_name == "tnf_k":
+
+        embedding = calculate_tnf(dna_sequences, kernel=True)
+        embedding = normalize(embedding, norm='l2')
+
+    elif model_name == "hyenadna":
+
+        embedding = calculate_llm_embedding(
+            dna_sequences,
+            model_name_or_path="LongSafari/hyenadna-medium-450k-seqlen-hf",
+            model_max_length=20000,
+            batch_size=batch_size
+        )
+        embedding = normalize(embedding, norm='l2')
+
+    elif model_name == "dnabert2":
+
+        embedding = calculate_llm_embedding(
+            dna_sequences,
+            model_name_or_path="zhihan1996/DNABERT-2-117M",
+            model_max_length=5000,
+            batch_size=batch_size
+        )
+        embedding = normalize(embedding, norm='l2')
+
+    elif model_name == "nt":
+
+        embedding = calculate_llm_embedding(
+            dna_sequences,
+            model_name_or_path="InstaDeepAI/nucleotide-transformer-v2-100m-multi-species",
+            model_max_length=2048,
+            batch_size=batch_size
+        )
+        embedding = normalize(embedding, norm='l2')
+
+    elif model_name == "dnaberts":
+
+        embedding = calculate_llm_embedding(
+            dna_sequences,
+            model_name_or_path=test_model_dir,
+            model_max_length=5000,
+            batch_size=batch_size
+        )
+        embedding = normalize(embedding, norm='l2')
+
+    elif model_name == "kmerprofile":
+
+        norm = 'l1' if metric is None else metric
+        embedding = calculate_tnf(dna_sequences, k=k)
+        embedding = normalize(embedding, norm=norm)
+
+    elif model_name == "poisson":
+
+        kwargs, model_state_dict = torch.load(test_model_dir, map_location=torch.device("cpu"))
+        kwargs['device'] = "cpu"
+        pm = PoissonModel(**kwargs)
+        pm.load_state_dict(model_state_dict)
+        embedding = pm.read2emb(dna_sequences)
+
+    elif model_name == "nonlinear":
+
+        kwargs, model_state_dict = torch.load(test_model_dir, map_location=torch.device("cpu"))
+        kwargs['device'] = "cpu"
+        nlm = NonLinearModel(**kwargs)
+        nlm.load_state_dict(model_state_dict)
+        embedding = nlm.read2emb(dna_sequences)
+
+    elif model_name == "conv_nonlinear":
+        from src.scalable import VIBModel
+        print("test_model_dir", test_model_dir)
+
+        device = "cpu"
+        kwargs, state_dict = torch.load(test_model_dir)
+        print("kwargs", kwargs)
+
+        model = VIBModel(**kwargs)
+        model.load_state_dict(state_dict)
+        print(f"Loaded model with k={model.get_k()}, n_filters={model.n_filters}")
+        model.eval()
+
+        embeddings = model.seq2emb(dna_sequences)
+        return embeddings
+    elif model_name == "conv_feature_extractor":
+        raise NotImplementedError(f"{model_name} not implemented yet")
+        
 
     else:
-        print(f"Calculate embedding for {model_name} {species} {sample}")
+        raise ValueError(f"Unknown model {model_name}")
 
-        if model_name == "tnf":
-
-            embedding = calculate_tnf(dna_sequences)
-            embedding = normalize(embedding, norm='l2')
-
-        elif model_name == "tnf_k":
-
-            embedding = calculate_tnf(dna_sequences, kernel=True)
-            embedding = normalize(embedding, norm='l2')
-
-        elif model_name == "hyenadna":
-
-            embedding = calculate_llm_embedding(
-                dna_sequences,
-                model_name_or_path="LongSafari/hyenadna-medium-450k-seqlen-hf",
-                model_max_length=20000,
-                batch_size=batch_size
-            )
-            embedding = normalize(embedding, norm='l2')
-
-        elif model_name == "dnabert2":
-
-            embedding = calculate_llm_embedding(
-                dna_sequences,
-                model_name_or_path="zhihan1996/DNABERT-2-117M",
-                model_max_length=5000,
-                batch_size=batch_size
-            )
-            embedding = normalize(embedding, norm='l2')
-
-        elif model_name == "nt":
-
-            embedding = calculate_llm_embedding(
-                dna_sequences,
-                model_name_or_path="InstaDeepAI/nucleotide-transformer-v2-100m-multi-species",
-                model_max_length=2048,
-                batch_size=batch_size
-            )
-            embedding = normalize(embedding, norm='l2')
-
-        elif model_name == "dnaberts":
-
-            embedding = calculate_llm_embedding(
-                dna_sequences,
-                model_name_or_path=test_model_dir,
-                model_max_length=5000,
-                batch_size=batch_size
-            )
-            embedding = normalize(embedding, norm='l2')
-
-        elif model_name == "kmerprofile":
-
-            norm = 'l1' if metric is None else metric
-            embedding = calculate_tnf(dna_sequences, k=k)
-            embedding = normalize(embedding, norm=norm)
-
-        elif model_name == "poisson":
-
-            kwargs, model_state_dict = torch.load(test_model_dir, map_location=torch.device("cpu"))
-            kwargs['device'] = "cpu"
-            pm = PoissonModel(**kwargs)
-            pm.load_state_dict(model_state_dict)
-            embedding = pm.read2emb(dna_sequences)
-
-        elif model_name == "nonlinear":
-
-            kwargs, model_state_dict = torch.load(test_model_dir, map_location=torch.device("cpu"))
-            kwargs['device'] = "cpu"
-            nlm = NonLinearModel(**kwargs)
-            nlm.load_state_dict(model_state_dict)
-            embedding = nlm.read2emb(dna_sequences)
-
-        elif model_name == "conv_nonlinear":
-            from src.scalable import VIBModel
-            print("in ", model_name)
-            device = "cpu"
-            kwargs, state_dict = torch.load(test_model_dir)
-            model = VIBModel(**kwargs)
-            model.load_state_dict(state_dict)
-            print("Loaded model")
-            model.eval()
-
-            embeddings = model.seq2emb(dna_sequences)
-            return embeddings
-        elif model_name == "conv_feature_extractor":
-            raise NotImplementedError(f"{model_name} not implemented yet")
-            
-
-        else:
-            raise ValueError(f"Unknown model {model_name}")
-
-        # Save the embedding file
-        os.makedirs(embedding_file_dir, exist_ok=True)
-        with open(embedding_file_path, 'wb') as f:
-            np.save(f, embedding)
+    # Save the embedding file
+    os.makedirs(embedding_file_dir, exist_ok=True)
+    with open(embedding_file_path, 'wb') as f:
+        np.save(f, embedding)
 
     return embedding
 
